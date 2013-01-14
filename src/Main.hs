@@ -25,6 +25,7 @@ import Game.Input
 import Game.State
 import Game.Vector
 import Physics.Types
+import Util.Id
 import Util.Stream
 
 import Main.Graphics
@@ -42,7 +43,7 @@ isOpen :: EventPoller -> IO Bool
 isOpen poll = null <$> poll [CloseEvents]
 
 -- | Program state
-data State = State { game       :: Stream Inputs GameState
+data State = State { game       :: Stream Id Inputs GameState
                    , mousePos   :: Maybe Position
                    , lastUpdate :: Double
                    , inputs     :: Map Input (Positive Integer)
@@ -66,7 +67,7 @@ mainLoop poll state = ifm (isOpen poll)
                     $ do mouse <- newMouse <$> poll [MouseMoveEvents]
                          input <- getInputs poll mouse
                          let presses = mapMaybe (\(i, b) -> mcond (b == Press) i) input
-                             (render, newGame) = game state $< presses
+                             (render, newGame) = runId $ game state $< presses
                          updateGraphics poll render
                          t <- io getTime
                          return $ inputs' (\is -> foldr updateInput is input)

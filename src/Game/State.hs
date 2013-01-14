@@ -13,6 +13,7 @@ import Storage.List
 import Game.Input
 import Game.Object
 import Physics.Types
+import Util.Id
 import Util.Stream
 
 type Creation = (Object, Position)
@@ -28,16 +29,16 @@ fromSelect (Select obj) = Just obj
 fromSelect _ = Nothing
 
 -- | Advance the GameState
-initGame :: Stream [Input] GameState
+initGame :: Stream Id [Input] GameState
 initGame = creations
          >>> updater (flip $ foldr create) (GameState $ listArray (0, 15) $ repeat Nothing)
 
-creations :: Stream [Input] [Creation]
+creations :: Stream Id [Input] [Creation]
 creations = (objects &&& arr (map fromPlace))
           <&> uncurry zip
           <&> mapMaybe (uncurry $ liftA2 (,))
 
-objects :: Stream [Input] [Maybe Object]
+objects :: Stream Id [Input] [Maybe Object]
 objects = updater (flip $ scanr updateObj . join . head) []
     where
         updateObj i obj = fromSelect i <|> obj
