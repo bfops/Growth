@@ -9,7 +9,6 @@ module Util.Stream ( Stream (..)
                    , identify
                    , updater
                    , latch
-                   , buffer
                    ) where
 
 import Prelewd
@@ -17,6 +16,9 @@ import Prelewd
 import Util.Id
 
 infix 6 $<
+
+double :: a -> (a, a)
+double x = (x, x)
 
 data Stream m a b = Stream { ($<) :: (a -> m (b, Stream m a b)) }
 
@@ -58,13 +60,9 @@ identify :: (Functor m, Monad m) => Stream Id a b -> Stream m a b
 identify (Stream f) = Stream $ return . runId . map (map identify) . f
 
 -- | Repeatedly apply a function to an internal updating value
-updater :: (Functor m, Monad m) => (a -> b -> b) -> b -> Stream m a b
-updater f b = identify $ Stream $ \x -> return $ ((,) <*> updater f) $ f x b
-
--- | `updater` supporting fluctuating inputs
-latch :: (Functor m, Monad m) => (a -> b -> b) -> b -> Stream m (Maybe a) b
-latch f = updater $ try . map f
+updater :: (a -> b -> b) -> b -> Stream Id (Maybe a) b
+updater f b = Stream $ \m -> Id $ updater f <$> double (f <$> m <?> id $ b)
 
 -- | Maintain the most recent `Just`
-buffer :: Stream Id (Maybe a) (Maybe a)
-buffer = updater (<|>) Nothing
+latch :: Stream Id (Maybe a) (Maybe a)
+latch = updater (\x _-> Just x) Nothing

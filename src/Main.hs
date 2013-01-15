@@ -40,7 +40,12 @@ loop f x = f x >>= loop f
 isOpen :: EventPoller -> IO Bool
 isOpen poll = null <$> poll [CloseEvents]
 
-extend :: Stream Id a b -> Stream Id [a] (Maybe b)
+-- | Lift a Monadic Stream
+mstream :: (Functor m, Monad m) => (a -> m b) -> Stream m a b
+mstream = lift . arr
+
+-- | Coerce a Stream to take group of inputs. Produces Nothing for empty groups.
+extend :: Foldable t => Stream Id a b -> Stream Id (t a) (Maybe b)
 extend s = Stream $ Id . map extend . foldr iterate (Nothing, s)
     where
         iterate :: a -> (Maybe b, Stream Id a b) -> (Maybe b, Stream Id a b)
@@ -51,9 +56,9 @@ main :: SystemIO ()
 main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
         initOpenGL
         poll <- createEventPoller
-        loop (mainLoop poll) $ lift (arr $ \_-> poll [ButtonEvents Nothing Nothing, MouseMoveEvents])
-                             >>> identify (batchUpdate >>> buffer <&> (<?> error "First update was empty"))
-                             >>> lift (arr $ updateGraphics poll)
+        loop (mainLoop poll) $ mstream (\_-> poll [ButtonEvents Nothing Nothing, MouseMoveEvents])
+                             >>> identify (batchUpdate >>> latch <&> (<?> error "First update was empty"))
+                             >>> mstream (updateGraphics poll)
     where
         -- | Update the GameState by chunks of Events
         batchUpdate :: Stream Id [Event] (Maybe GameState)
@@ -71,7 +76,7 @@ convertEvents = (mousePos &&& id) >>> arr (uncurry convertEvent)
         convertEvent _ _ = Nothing
 
 mousePos :: Stream Id Event (Maybe Position)
-mousePos = mouse >>> map convertPos >>> buffer
+mousePos = mouse >>> map convertPos >>> latch
     where
         mouse :: Stream Id Event (Maybe OGL.Position)
         mouse = arr fromMoveEvent

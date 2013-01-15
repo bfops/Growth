@@ -38,10 +38,12 @@ sequence2 = uncurry (liftA2 (,))
 
 -- | Advance the GameState
 game :: Stream Id (Maybe Input) GameState
-game = bind creations >>> latch place (GameState $ listArray (0, 15) $ repeat Nothing)
+game = bind creations >>> updater place (GameState $ listArray (0, 15) $ repeat Nothing)
 
+-- | What to add into the game worl
 creations :: Stream Id Input (Maybe Creation)
-creations = sequence2 <$> ((buffer <<< arr fromSelect) &&& arr fromPlace)
+creations = sequence2 <$> ((latch <<< arr fromSelect) &&& arr fromPlace)
 
+-- | Add something into the game world, if the tile isn't occupied
 place :: Creation -> GameState -> GameState
 place (obj, p) (GameState t) = GameState $ t // [(p, (t!p) <|> Just obj)]

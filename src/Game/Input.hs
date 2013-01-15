@@ -2,7 +2,6 @@
            #-}
 -- | Input handling
 module Game.Input ( Input (..)
-                  , Inputs
                   , ButtonState
                   ) where
 
@@ -19,5 +18,3 @@ import Physics.Types
 data Input = Select Object
            | Place Position
     deriving (Show, Eq, Ord)
-
-type Inputs = [Input]

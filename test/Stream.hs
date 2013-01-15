@@ -38,13 +38,12 @@ dscanl :: (a -> b -> a) -> a -> [b] -> [a]
 dscanl f b l = tail (scanl f b l) <?> error "scanl returned empty"
 
 case_fib :: Assertion
-case_fib = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55] @=? take 10 (runId $ fromStream fib $ repeat ())
+case_fib = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55] @=? take 10 (runId $ fromStream fib $ repeat $ Just ())
     where
-        fib :: Stream Id () Integer
         fib = fst <$> updater (\() (x, y) -> (y, x + y)) (0, 1)
 
 prop_compose :: [Integer] -> Bool
-prop_compose vals = dscanl (+) 0 vals == runId (fromStream str vals)
+prop_compose vals = dscanl (+) 0 vals == runId (fromStream str $ Just <$> vals)
     where
         str = id >>> (updater (+) 0 >>> id)
 
@@ -52,7 +51,8 @@ prop_map :: (Integer, [Integer]) -> Bool
 prop_map (n, ns) = map (*n) ns == runId (fromStream ((*n) <$> id) ns)
 
 prop_conjunct :: [Integer] -> Bool
-prop_conjunct ns = zip (dscanl (+) 0 ns) ns == runId (fromStream (updater (+) 0 &&& id) ns)
+prop_conjunct ns = zip (dscanl (+) 0 ns) (dscanl (flip (-)) 0 ns)
+                 == runId (fromStream (updater (+) 0 &&& updater (-) 0) $ Just <$> ns)
 
 prop_monad :: [Integer] -> Bool
 prop_monad ns = ns == whileJust (heads ns) (repeat ())
