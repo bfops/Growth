@@ -5,7 +5,7 @@
            #-}
 -- | Nonterminating Monadic coroutines
 module Util.Stream ( Stream (..)
-                   , (>>$)
+                   , lift
                    , identify
                    , updater
                    , latch
@@ -14,12 +14,9 @@ module Util.Stream ( Stream (..)
 
 import Prelewd
 
-import Data.Tuple
-
 import Util.Id
 
 infix 6 $<
-infix 2 >>$
 
 data Stream m a b = Stream { ($<) :: (a -> m (b, Stream m a b)) }
 
@@ -44,9 +41,17 @@ instance (Functor m, Monad m) => Mappable (Stream m) ((,) a) b b' where
     map (Stream f) = Stream $ \(a, b) -> ((a,) *** map) <$> f b
 
 instance (Applicative m, Monad m) => Mappable (Stream m) Maybe a b where
-    map s@(Stream f) = Stream $ \m -> do
-                    bs <- sequence (f <$> m)
-                    return (fst <$> bs, map $ snd <$> bs <?> s)
+    map = bind . map return
+
+instance (Applicative m, Monad m) => Bind (Stream m) Maybe a b where
+    bind s@(Stream f) = Stream $ \m -> extractNext <$> sequence (f <$> m)
+        where
+            extractNext Nothing = (Nothing, bind s)
+            extractNext (Just (b, s')) = (b, bind s')
+
+-- | Lift context from the output to the whole Stream
+lift :: (Functor m, Monad m) => Stream Id a (m b) -> Stream m a b
+lift (Stream f) = Stream $ (\(b, s) -> b <&> (, lift s)) . runId . f
 
 -- | Retype a Stream for Monadic use
 identify :: (Functor m, Monad m) => Stream Id a b -> Stream m a b
@@ -63,7 +68,3 @@ latch f = updater $ try . map f
 -- | Maintain the most recent `Just`
 buffer :: Stream Id (Maybe a) (Maybe a)
 buffer = updater (<|>) Nothing
-
--- | Use a Monad as an infinite source of values
-(>>$) :: (Functor m, Monad m) => m a -> Stream m a b -> Stream m () b
-(>>$) m (Stream f) = Stream $ \_-> m >>= map (m >>$) <$$> f
