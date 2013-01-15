@@ -17,9 +17,6 @@ import Util.Id
 
 infix 6 $<
 
-double :: a -> (a, a)
-double x = (x, x)
-
 data Stream m a b = Stream { ($<) :: (a -> m (b, Stream m a b)) }
 
 instance Functor m => Functor (Stream m a) where
@@ -53,7 +50,8 @@ instance (Applicative m, Monad m) => Bind (Stream m) Maybe a b where
 
 -- | Lift context from the output to the whole Stream
 lift :: (Functor m, Monad m) => Stream Id a (m b) -> Stream m a b
-lift (Stream f) = Stream $ (\(b, s) -> b <&> (, lift s)) . runId . f
+lift (Stream f) = Stream $ recurse . runId . f
+    where recurse (b, s) = b <&> (, lift s)
 
 -- | Retype a Stream for Monadic use
 identify :: (Functor m, Monad m) => Stream Id a b -> Stream m a b
@@ -62,6 +60,7 @@ identify (Stream f) = Stream $ return . runId . map (map identify) . f
 -- | Repeatedly apply a function to an internal updating value
 updater :: (a -> b -> b) -> b -> Stream Id (Maybe a) b
 updater f b = Stream $ \m -> Id $ updater f <$> double (f <$> m <?> id $ b)
+    where double x = (x, x)
 
 -- | Maintain the most recent `Just`
 latch :: Stream Id (Maybe a) (Maybe a)

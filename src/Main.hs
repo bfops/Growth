@@ -36,9 +36,9 @@ ifm b x = b >>= guard >> x
 loop :: Monad m => (a -> m a) -> a -> m a
 loop f x = f x >>= loop f
 
--- | Is the window open?
-isOpen :: EventPoller -> IO Bool
-isOpen poll = null <$> poll [CloseEvents]
+fromMoveEvent :: Event -> Maybe (OGL.Position)
+fromMoveEvent (MouseMoveEvent p) = Just p
+fromMoveEvent _ = Nothing
 
 -- | Lift a Monadic Stream
 mstream :: (Functor m, Monad m) => (a -> m b) -> Stream m a b
@@ -50,6 +50,10 @@ extend s = Stream $ Id . map extend . foldr iterate (Nothing, s)
     where
         iterate :: a -> (Maybe b, Stream Id a b) -> (Maybe b, Stream Id a b)
         iterate x (_, Stream f) = map2 Just $ runId $ f x
+
+-- | Is the window open?
+isOpen :: EventPoller -> IO Bool
+isOpen poll = null <$> poll [CloseEvents]
 
 -- | Entry point
 main :: SystemIO ()
@@ -76,16 +80,13 @@ convertEvents = (mousePos &&& id) >>> arr (uncurry convertEvent)
         convertEvent _ _ = Nothing
 
 mousePos :: Stream Id Event (Maybe Position)
-mousePos = mouse >>> map convertPos >>> latch
+mousePos = mouse >>> map (arr convertPos) >>> latch
     where
         mouse :: Stream Id Event (Maybe OGL.Position)
         mouse = arr fromMoveEvent
-            where
-                fromMoveEvent (MouseMoveEvent p) = Just p
-                fromMoveEvent _ = Nothing
 
-        convertPos :: Stream Id OGL.Position Position
-        convertPos = arr $ \(OGL.Position x y) -> Vector (toInteger x `div` 50) (toInteger (800-y) `div` 50)
+        convertPos :: OGL.Position -> Position
+        convertPos (OGL.Position x y) = Vector (toInteger x `div` 50) (toInteger (800-y) `div` 50)
 
 mainLoop :: EventPoller -> Stream IO () () -> IO (Stream IO () ())
 mainLoop poll s = ifm (isOpen poll) $ snd <$> s $< ()
