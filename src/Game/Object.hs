@@ -18,11 +18,16 @@ data Object = Fire
             | Grass
             | Water
             | Air
+            | Rock
     deriving (Show, Eq, Ord)
 
 -- | What does an Object produce in neighbouring cells?
 spawn :: Object -> Object
-spawn = id
+spawn Fire = Fire
+spawn Water = Water
+spawn Grass = Grass
+spawn Air = Air
+spawn Rock = Air
 
 -- | Combine two overlapping Objects two produce a new one.
 -- `mix` is commutative, but not associative.
@@ -38,5 +43,8 @@ mixes :: Map (Pair Object) Object
 mixes = fromList $
       [ (Pair Fire Grass    , Fire)
       , (Pair Grass Water   , Grass)
-      , (Pair Fire Water    , Air)
+      , (Pair Fire Water    , Water)
+      , (Pair Rock Water    , Rock)
+      , (Pair Rock Fire     , Rock)
+      , (Pair Rock Grass    , Rock)
       ]

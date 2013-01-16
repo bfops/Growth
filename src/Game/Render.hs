@@ -36,6 +36,7 @@ instance Drawable (Position, Object) where
     draw (p, Fire) = drawQuad orange p
     draw (p, Water) = drawQuad blue p
     draw (p, Grass) = drawQuad green p
+    draw (p, Rock) = drawQuad grey p
 
 -- | `draw c o` draws `o` as a quadrilateral, based on its position and size.
 drawQuad :: Color4 GLdouble -> Position -> IO ()
