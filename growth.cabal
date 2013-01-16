@@ -17,7 +17,7 @@ Executable Growth
                     stm,
                     array,
                     tuple,
-                    Step ==0.4,
+                    Step ==0.6,
                     Game-Wrappers ==0.1,
                     QuickCheck >= 2,
                     base
@@ -31,7 +31,7 @@ test-suite Tests
 
     build-depends: 
                     QuickCheck >= 2,
-                    Step ==0.4,
+                    Step ==0.6,
                     HUnit,
                     test-framework-quickcheck2,
                     test-framework-hunit,

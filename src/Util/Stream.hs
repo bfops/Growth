@@ -13,6 +13,8 @@ module Util.Stream ( Stream (..)
 
 import Prelewd
 
+import Storage.Either
+
 import Util.Id
 
 infix 6 $<
@@ -39,14 +41,21 @@ instance (Functor m, Monad m) => Compose (Stream m) where
 instance (Functor m, Monad m) => Mappable (Stream m) ((,) a) b b' where
     map (Stream f) = Stream $ \(a, b) -> ((a,) *** map) <$> f b
 
-instance (Applicative m, Monad m) => Mappable (Stream m) Maybe a b where
-    map = bind . map return
-
 instance (Applicative m, Monad m) => Bind (Stream m) Maybe a b where
     bind s@(Stream f) = Stream $ \m -> extractNext <$> sequence (f <$> m)
         where
             extractNext Nothing = (Nothing, bind s)
             extractNext (Just (b, s')) = (b, bind s')
+
+instance (Applicative m, Monad m) => Mappable (Stream m) Maybe a b where map = bind . map return
+
+instance (Applicative m, Monad m) => Bind (Stream m) (Either r) a b where
+    bind s@(Stream f) = Stream $ \e -> extractNext <$> sequence (f <$> e)
+        where
+            extractNext (Left r) = (Left r, bind s)
+            extractNext (Right (b, s')) = (b, bind s')
+
+instance (Applicative m, Monad m) => Mappable (Stream m) (Either r) a b where map = bind . map return
 
 -- | Lift context from the output to the whole Stream
 lift :: (Functor m, Monad m) => Stream Id a (m b) -> Stream m a b
