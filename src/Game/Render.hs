@@ -29,9 +29,10 @@ class Drawable d where
     draw :: d -> IO ()
 
 instance Drawable GameState where
-    draw = traverse_ (<?> return ()) . elems . mapWithIx (map . curry draw) . tiles
+    draw = sequence_ . elems . mapWithIx (curry draw) . tiles
 
 instance Drawable (Position, Object) where
+    draw (_, Air) = return ()
     draw (p, Fire) = drawQuad orange p
     draw (p, Water) = drawQuad blue p
     draw (p, Grass) = drawQuad green p

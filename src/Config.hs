@@ -45,6 +45,7 @@ keymap = mapKeys CharKey $ fromList
        [ ('A', Select Fire)
        , ('S', Select Water)
        , ('D', Select Grass)
+       , (' ', Step)
        ]
 
 clickAction :: Position -> Input
