@@ -38,6 +38,7 @@ instance Drawable (Position, Object) where
             objColor Water = blue
             objColor Grass = green
             objColor Rock = grey
+            objColor Lava = red
             objColor Air = cyan
 
 -- | `draw c o` draws `o` as a quadrilateral, based on its position and size.

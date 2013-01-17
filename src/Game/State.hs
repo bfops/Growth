@@ -31,11 +31,19 @@ rights = arr $ either (\_-> Nothing) Just
 sequence2 :: Applicative f => (f a, f b) -> f (a, b)
 sequence2 = uncurry (liftA2 (,))
 
-up, down, left, right :: Position -> Position
-up = component' Height (+1)
-down = component' Height (subtract 1)
-left = component' Width (subtract 1)
-right = component' Width (+1)
+up, down, left, right :: Array Position (Vector (Object, Object)) -> Position -> Maybe Object
+
+up = getObj Height True
+down = getObj Height False
+left = getObj Width False
+right = getObj Width True
+
+getObj :: Dimension -> Bool -> Array Position (Vector (Object, Object)) -> Position -> Maybe Object
+getObj dim pos b p = iff pos fst snd . component dim . (b !)
+                   <$> checkBounds (component' dim (iff pos (+) subtract 1) p)
+    where
+        checkBounds = let (l, h) = bounds b
+                      in cast $ inRange (l, h)
 
 type Creation = (Object, Position)
 type Board = Array Position Object
@@ -62,20 +70,17 @@ creations = sequence2 <$> ((latch <<< lefts) &&& rights)
 
 -- | Add something into the game world, if the tile isn't occupied
 place :: Creation -> GameState -> GameState
-place (obj, p) (GameState t) = GameState $ t // [(p, mix (t!p) obj)]
+place (obj, p) (GameState t) = GameState $ t // [(p, mix obj $ t!p)]
 
 -- | Advance the game state
 step :: () -> GameState -> GameState
 step _ = tiles' $ mapWithIx . combine =<< map spawn
     where
         -- | Mix a tile with its surroundings.
-        combine :: Board -> Position -> Object -> Object
+        combine :: Array Position (Vector (Object, Object))  -> Position -> Object -> Object
         combine b p obj = foldr mixNeighbour obj $ [ up, left, right, down ]
             where
-                mixNeighbour nbr = mix . (b !) <$> checkBounds (nbr p) <?> id
-
-                checkBounds = let (l, h) = bounds b
-                              in cast $ inRange (l, h)
+                mixNeighbour nbr = mix <$> nbr b p <?> id
 
 initGame :: GameState
 initGame = GameState $ listArray (0, 15) $ repeat Air
