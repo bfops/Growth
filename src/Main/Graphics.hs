@@ -10,10 +10,7 @@ import IO
 
 import Impure
 
-import Data.Tuple.All
 import Storage.List
-
-import Config
 
 import Game.Render
 import Game.State
@@ -28,9 +25,6 @@ initOpenGL = io $ do
         clearDepth $= 1
         depthFunc $= Just Less
         hint PerspectiveCorrection $= Nicest
-
-        let glColor = uncurryN Color4 bgColor
-        clearColor $= toGLColor (glColor :: Color4 GLubyte)
 
 -- | Draw one frame of the game state
 drawFrame :: GameState -- ^ State to draw

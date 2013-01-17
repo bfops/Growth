@@ -3,7 +3,6 @@
 -- | Settings are stored in this module
 module Config ( viewDist
               , displayOpts
-              , bgColor
               , title
               , keymap
               , clickAction
@@ -30,10 +29,6 @@ displayOpts = defaultDisplayOptions
     , displayOptions_height = 800
     , displayOptions_windowIsResizable = False
     }
-
--- | Background color
-bgColor :: Num a => (a, a, a, a)
-bgColor = (0, 175, 200, 0)
 
 -- | Title of the game window
 title :: Text

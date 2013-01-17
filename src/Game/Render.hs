@@ -32,11 +32,13 @@ instance Drawable GameState where
     draw = sequence_ . elems . mapWithIx (curry draw) . tiles
 
 instance Drawable (Position, Object) where
-    draw (_, Air) = return ()
-    draw (p, Fire) = drawQuad orange p
-    draw (p, Water) = drawQuad blue p
-    draw (p, Grass) = drawQuad green p
-    draw (p, Rock) = drawQuad grey p
+    draw (p, o) = drawQuad (objColor o) p
+        where
+            objColor Fire = orange
+            objColor Water = blue
+            objColor Grass = green
+            objColor Rock = grey
+            objColor Air = cyan
 
 -- | `draw c o` draws `o` as a quadrilateral, based on its position and size.
 drawQuad :: Color4 GLdouble -> Position -> IO ()
