@@ -24,11 +24,11 @@ data Stream m a b = Stream { ($<) :: (a -> m (b, Stream m a b)) }
 instance Functor m => Functor (Stream m a) where
     fmap f (Stream s) = Stream $ (f *** fmap f) <$$> s
 
-instance (Functor m, Monad m) => Applicative (Stream m a) where
-    pure x = Stream $ \_ -> return (x, pure x)
-    (Stream f1) <*> (Stream f2) = Stream $ \x -> do
-                        (v1, f1') <- f1 x
-                        (v1 *** (f1' <*>)) <$> f2 x
+instance Applicative m => Applicative (Stream m a) where
+    pure x = Stream $ \_ -> pure (x, pure x)
+    (Stream f1) <*> (Stream f2) = Stream $ \x -> foo <$> f1 x <*> f2 x
+        where
+            foo (v1, f1') (v2, f2') = (v1 v2, f1' <*> f2')
 
 instance Monad m => Identity (Stream m) where
     id = Stream $ return . (, id)
