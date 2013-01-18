@@ -2,6 +2,7 @@
            #-}
 -- | Basic game object type, and associated functions
 module Game.Object ( Object (..)
+                   , Spawn
                    , spawn
                    , mix
                    ) where
@@ -20,19 +21,22 @@ data Object = Fire
             | Rock
     deriving (Show, Eq, Ord)
 
-all, gravity :: Object -> Vector (Object, Object)
+-- | The directions in which to spawn
+type Spawn = Vector (Maybe Object, Maybe Object)
 
-all x = pure (x, x)
-gravity = component' Height (map $ \_-> Air) . all
+all, gravity :: Object -> Spawn
+
+all o = pure (Just o, Just o)
+gravity = component' Height (map $ \_-> Nothing) . all
 
 -- | What does an Object produce in neighbouring cells?
-spawn :: Object -> Vector (Object, Object)
+spawn :: Object -> Spawn
 spawn Fire = all Fire
 spawn Lava = all Lava
 spawn Grass = all Grass
 spawn Water = gravity Water
 spawn Air = all Air
-spawn Rock = all Air
+spawn Rock = all Rock
 
 -- | Combine two overlapping Objects two produce a new one.
 mix :: Object -> Object -> Object

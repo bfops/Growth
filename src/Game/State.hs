@@ -31,16 +31,17 @@ rights = arr $ either (\_-> Nothing) Just
 sequence2 :: Applicative f => (f a, f b) -> f (a, b)
 sequence2 = uncurry (liftA2 (,))
 
-up, down, left, right :: Array Position (Vector (Object, Object)) -> Position -> Maybe Object
+up, down, left, right :: Array Position Spawn -> Position -> Maybe Object
 
 up = getObj Height True
 down = getObj Height False
 left = getObj Width False
 right = getObj Width True
 
-getObj :: Dimension -> Bool -> Array Position (Vector (Object, Object)) -> Position -> Maybe Object
-getObj dim pos b p = iff pos fst snd . component dim . (b !)
-                   <$> checkBounds (component' dim (iff pos (+) subtract 1) p)
+getObj :: Dimension -> Bool -> Array Position Spawn -> Position -> Maybe Object
+getObj dim pos b p0 = do
+            spwn <- (b !) <$> checkBounds (component' dim (iff pos (+) subtract 1) p0)
+            iff pos fst snd $ component dim spwn
     where
         checkBounds = let (l, h) = bounds b
                       in cast $ inRange (l, h)
@@ -77,7 +78,7 @@ step :: () -> GameState -> GameState
 step _ = tiles' $ mapWithIx . combine =<< map spawn
     where
         -- | Mix a tile with its surroundings.
-        combine :: Array Position (Vector (Object, Object))  -> Position -> Object -> Object
+        combine :: Array Position Spawn  -> Position -> Object -> Object
         combine b p obj = foldr mixNeighbour obj $ [ up, left, right, down ]
             where
                 mixNeighbour nbr = mix <$> nbr b p <?> id
