@@ -10,7 +10,9 @@ import Prelewd
 import Impure
 import IO
 
+import Control.Stream
 import Data.Tuple
+import Storage.Id
 import Storage.Map
 
 import Wrappers.Events
@@ -23,8 +25,6 @@ import Game.Input
 import Game.State
 import Game.Vector
 import Physics.Types
-import Util.Id
-import Util.Stream
 
 import Main.Graphics
 
@@ -61,7 +61,7 @@ main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
         initOpenGL
         poll <- createEventPoller
         loop (mainLoop poll) $ mstream (\_-> poll [ButtonEvents Nothing Nothing, MouseMoveEvents])
-                             >>> identify (batchUpdate >>> latch <&> (<?> error "First update was empty"))
+                             >>> identify (batchUpdate >>> latch (error "First update was empty"))
                              >>> mstream (updateGraphics poll)
     where
         -- | Update the GameState by chunks of Events
@@ -71,16 +71,14 @@ main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
 convertEvents :: Stream Id Event (Maybe Input)
 convertEvents = (mousePos &&& id) >>> arr (uncurry convertEvent)
     where
-        convertEvent :: Maybe Position -> Event -> Maybe Input
+        convertEvent :: Position -> Event -> Maybe Input
         convertEvent _ (ButtonEvent _ Release) = Nothing
         convertEvent _ (ButtonEvent (KeyButton key) _) = lookup key keymap
-        convertEvent mouse (ButtonEvent (MouseButton MouseButton0) _) =
-                                    Just $ clickAction $ mouse <?> error "No mouse pos"
-
+        convertEvent mouse (ButtonEvent (MouseButton MouseButton0) _) = Just $ clickAction mouse
         convertEvent _ _ = Nothing
 
-mousePos :: Stream Id Event (Maybe Position)
-mousePos = mouse >>> map (arr convertPos) >>> latch
+mousePos :: Stream Id Event Position
+mousePos = mouse >>> map (arr convertPos) >>> latch (error "No mouse pos")
     where
         mouse :: Stream Id Event (Maybe OGL.Position)
         mouse = arr fromMoveEvent

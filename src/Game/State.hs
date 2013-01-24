@@ -9,10 +9,12 @@ module Game.State ( GameState (..)
 
 import Prelewd hiding ((!))
 
+import Control.Stream
 import Data.Ix
 import Data.Tuple
 import Storage.Array
 import Storage.Either
+import Storage.Id
 import Storage.List
 import Storage.Pair
 import Template.MemberTransformer
@@ -21,8 +23,6 @@ import Game.Input
 import Game.Object
 import Game.Vector
 import Physics.Types
-import Util.Id
-import Util.Stream
 
 lefts :: Stream Id (Either a b) (Maybe a)
 lefts = arr $ either Just (\_-> Nothing)
@@ -56,7 +56,9 @@ updates = arr reshape >>> map creations >>> arr sequence
 
 -- | What to add into the game world
 creations :: Stream Id (Either Object Position) (Maybe Creation)
-creations = sequence2 <$> ((latch <<< lefts) &&& rights)
+creations = sequence2 <$> ((buffer <<< lefts) &&& rights)
+    where
+        buffer = updater (\x _-> Just x) Nothing
 
 update :: Either () Creation -> (Board, Array Position Update) -> (Board, Array Position Update)
 

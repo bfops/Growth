@@ -7,14 +7,13 @@ import Impure
 import Data.Char
 import Data.Tuple
 import Storage.Array
+import Storage.Id
 import Storage.List
 
 import Test.Framework
 import Test.Framework.TH
 import Test.Framework.Providers.QuickCheck2
 import Test.Framework.Providers.HUnit
-
-import Util.Id
 
 test :: Test
 test = $(testGroupGenerator)

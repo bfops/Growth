@@ -12,12 +12,12 @@ module Game.Object ( Object (..)
 
 import Prelewd hiding (all)
 
+import Control.Stream
+import Storage.Id
 import Storage.Pair
 import Text.Show
 
 import Game.Vector
-import Util.Id
-import Util.Stream
 
 data Object = Fire
             | Lava
