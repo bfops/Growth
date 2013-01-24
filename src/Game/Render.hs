@@ -29,7 +29,7 @@ class Drawable d where
     draw :: d -> IO ()
 
 instance Drawable GameState where
-    draw = sequence_ . elems . mapWithIx (curry draw) . tiles
+    draw = sequence_ . elems . mapWithIx (curry draw <%> fst) . tiles
 
 instance Drawable (Position, Object) where
     draw (p, o) = drawQuad (objColor o) p

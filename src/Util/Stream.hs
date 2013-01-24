@@ -5,6 +5,7 @@
            #-}
 -- | Nonterminating Monadic coroutines
 module Util.Stream ( Stream (..)
+                   , (>$)
                    , lift
                    , identify
                    , updater
@@ -17,7 +18,7 @@ import Storage.Either
 
 import Util.Id
 
-infix 6 $<
+infix 6 $<, >$
 
 data Stream m a b = Stream { ($<) :: (a -> m (b, Stream m a b)) }
 
@@ -56,6 +57,9 @@ instance (Applicative m, Monad m) => Bind (Stream m) (Either r) a b where
             extractNext (Right (b, s')) = (b, bind s')
 
 instance (Applicative m, Monad m) => Mappable (Stream m) (Either r) a b where map = bind . map return
+
+(>$) :: a -> Stream m a b -> m (b, Stream m a b)
+(>$) = flip ($<)
 
 -- | Lift context from the output to the whole Stream
 lift :: (Functor m, Monad m) => Stream Id a (m b) -> Stream m a b

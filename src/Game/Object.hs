@@ -2,6 +2,9 @@
            #-}
 -- | Basic game object type, and associated functions
 module Game.Object ( Object (..)
+                   , Seeds
+                   , Update
+                   , object
                    , Spawn
                    , spawn
                    , mix
@@ -9,9 +12,12 @@ module Game.Object ( Object (..)
 
 import Prelewd hiding (all)
 
+import Storage.Pair
 import Text.Show
 
 import Game.Vector
+import Util.Id
+import Util.Stream
 
 data Object = Fire
             | Lava
@@ -22,23 +28,25 @@ data Object = Fire
     deriving (Show, Eq, Ord)
 
 -- | The directions in which to spawn
-type Spawn = Vector (Maybe Object, Maybe Object)
+type Spawn = Vector (Pair Bool)
+-- | Spawns from a set of neighbours
+type Seeds = Vector (Pair (Maybe Object))
+type Update = Stream Id (Maybe Seeds) (Object, Spawn)
 
-all, gravity :: Object -> Spawn
-
-all o = pure (Just o, Just o)
-gravity = component' Height (map $ \_-> Nothing) . all
+all, gravity :: Spawn
+all = pure $ pure True
+gravity = component' Height (\_-> Pair True False) all
 
 -- | What does an Object produce in neighbouring cells?
 spawn :: Object -> Spawn
-spawn Fire = all Fire
-spawn Lava = all Lava
-spawn Grass = all Grass
-spawn Water = gravity Water
-spawn Air = all Air
-spawn Rock = all Rock
+spawn Fire = all
+spawn Lava = all
+spawn Grass = all
+spawn Water = gravity
+spawn Air = all
+spawn Rock = all
 
--- | Combine two overlapping Objects two produce a new one.
+-- | `mix a b` mixes a and b to produce a new b
 mix :: Object -> Object -> Object
 
 mix Water Lava = Rock
@@ -69,3 +77,9 @@ mix Grass Fire = Fire
 mix Grass Grass = Grass
 mix Grass Water = Grass
 mix Grass Air = Air
+
+mixV :: Vector (Pair (Maybe Object)) -> Object -> Object
+mixV (Vector (Pair left right) (Pair up down)) obj = foldl (flip mix) obj $ mapMaybe id [up, left, right, down]
+
+object :: Update
+object = updater (\v (o, _) -> ((,) <*> spawn) $ mixV v o) (Air, all)
