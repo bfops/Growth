@@ -27,6 +27,19 @@ After a successful build, the game can be run from
 
     dist/build/Growth/Growth
 
+Keys are configurable in `src/Config.hs`
+
+## Mixing
+
+Objects mix with one another as shown in `Game/Object.hs`.
+The order in which a tile mixes with its neighbours is up, left, right, down.
+
+## Updating
+
+Updating is done incrementally whenever the key (configurable) is pressed.
+Water spreads (but not upwards); grass, fire, and lava spread in any direction, provided they have fuel
+(i.e. anything with which they will mix to propogate themselves). Rock doesn't spread, and is just there to build designs.
+
 # Documentation
 
 Haddock documentation can be generated using
