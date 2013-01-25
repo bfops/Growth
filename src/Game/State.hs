@@ -85,7 +85,7 @@ checkBounds b = let (l, h) = bounds b
                 in cast (inRange (l, h))
 
 initGame :: Array Position Update
-initGame = listArray (0, 15) $ repeat object
+initGame = listArray (0, 31) $ repeat object
 
 initBoard :: Board
 initBoard = initGame <&> \_-> (Air, pure $ pure True)

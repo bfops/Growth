@@ -84,7 +84,7 @@ mousePos = mouse >>> map (arr convertPos) >>> latch (error "No mouse pos")
         mouse = arr fromMoveEvent
 
         convertPos :: OGL.Position -> Position
-        convertPos (OGL.Position x y) = Vector (toInteger x `div` 50) (toInteger (800-y) `div` 50)
+        convertPos (OGL.Position x y) = Vector (toInteger x `div` 25) (toInteger (800-y) `div` 25)
 
 mainLoop :: EventPoller -> Stream IO () () -> IO (Stream IO () ())
 mainLoop poll s = ifm (isOpen poll) $ snd <$> s $< ()
