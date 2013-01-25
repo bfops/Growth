@@ -79,7 +79,7 @@ mix Grass Water = Grass
 mix Grass Air = Air
 
 mixV :: Vector (Pair (Maybe Object)) -> Object -> Object
-mixV (Vector (Pair left right) (Pair up down)) obj = foldl (flip mix) obj $ mapMaybe id [up, left, right, down]
+mixV (Vector (Pair left right) (Pair down up)) obj = foldl (flip mix) obj $ mapMaybe id [up, left, right, down]
 
 object :: Update
 object = blackBox (selectUpdater . runId <$$> (>$)) (updateObject Air)
