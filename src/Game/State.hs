@@ -62,12 +62,12 @@ creations = sequence2 <$> ((buffer <<< lefts) &&& rights)
 
 update :: Either () Creation -> (Board, Array Position Update) -> (Board, Array Position Update)
 
-update (Right (obj, p)) (b, a) = let Id (result, s) = a ! p $< Just (singleSpawn obj)
+update (Right (obj, p)) (b, a) = let Id (result, s) = a ! p $< singleSpawn obj
                                  in (b // [(p, result)], a // [(p, s)])
     where
         singleSpawn = singleV (pure Nothing) Width . Pair Nothing . Just
 
-update (Left _) (b, a0) = splitA $ zipAWith (runId <$$> ($<)) a0 $ Just <$> disseminate
+update (Left _) (b, a0) = splitA $ zipAWith (runId <$$> ($<)) a0 disseminate
     where
         -- Propogate each Spawn to its neighbours, so each Position will have one Object from each neighbour
         disseminate :: Array Position Seeds

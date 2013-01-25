@@ -31,7 +31,7 @@ data Object = Fire
 type Spawn = Vector (Pair Bool)
 -- | Spawns from a set of neighbours
 type Seeds = Vector (Pair (Maybe Object))
-type Update = Stream Id (Maybe Seeds) (Object, Spawn)
+type Update = Stream Id Seeds (Object, Spawn)
 
 all, gravity :: Spawn
 all = pure $ pure True
@@ -49,7 +49,7 @@ spawn Rock = all
 -- | `mix a b` mixes a and b to produce a new b
 mix :: Object -> Object -> Object
 
-mix Water Lava = Rock
+mix Air Lava = Rock
 mix _ Lava = Lava
 
 mix Lava Rock = Lava
@@ -82,4 +82,14 @@ mixV :: Vector (Pair (Maybe Object)) -> Object -> Object
 mixV (Vector (Pair left right) (Pair up down)) obj = foldl (flip mix) obj $ mapMaybe id [up, left, right, down]
 
 object :: Update
-object = updater (\v (o, _) -> ((,) <*> spawn) $ mixV v o) (Air, all)
+object = blackBox (selectUpdater . runId <$$> (>$)) (updateObject Air)
+       >>> latch Air
+       >>> arr ((,) <*> spawn)
+    where
+        -- If the Object is changing, create a fresh updater
+        selectUpdater (x, s) = (x, updateObject <$> x <?> s)
+
+updateObject :: Object -> Stream Id Seeds (Maybe Object)
+updateObject o = arr Just >>> updater mixV o >>> diff o
+    where
+        diff obj = Stream $ Id <$> (cast (/= obj) &&& diff)
