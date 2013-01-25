@@ -33,8 +33,9 @@ type Spawn = Vector (Pair Bool)
 type Seeds = Vector (Pair (Maybe Object))
 type Update = Stream Id Seeds (Object, Spawn)
 
-all, gravity :: Spawn
+all, none, gravity :: Spawn
 all = pure $ pure True
+none = pure $ pure False
 gravity = component' Height (\_-> Pair True False) all
 
 -- | What does an Object produce in neighbouring cells?
@@ -44,7 +45,7 @@ spawn Lava = all
 spawn Grass = all
 spawn Water = gravity
 spawn Air = all
-spawn Rock = all
+spawn Rock = none
 
 -- | `mix a b` mixes a and b to produce a new b
 mix :: Object -> Object -> Object
@@ -56,7 +57,7 @@ mix Lava Rock = Lava
 mix _ Rock = Rock
 
 mix Air x = x
-mix Rock x = x
+mix Rock _ = Rock
 
 mix Fire Fire = Fire
 mix Fire Grass = Fire
