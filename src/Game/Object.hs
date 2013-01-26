@@ -1,4 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude
+           , TupleSections
            #-}
 -- | Basic game object type, and associated functions
 module Game.Object ( Object (..)
@@ -39,13 +40,13 @@ none = pure $ pure False
 gravity = component' Height (\_-> Pair True False) all
 
 -- | What does an Object produce in neighbouring cells?
-spawn :: Object -> Spawn
-spawn Fire = all
-spawn Lava = all
-spawn Grass = all
-spawn Water = gravity
-spawn Air = all
-spawn Rock = none
+spawn :: Object -> Stream Id Seeds Spawn
+spawn Fire = pure all
+spawn Lava = pure all
+spawn Grass = pure all
+spawn Water = pure gravity
+spawn Air = pure all
+spawn Rock = pure none
 
 -- | `mix a b` mixes a and b to produce a new b
 mix :: Object -> Object -> Object
@@ -79,18 +80,14 @@ mix Grass Grass = Grass
 mix Grass Water = Grass
 mix Grass Air = Air
 
-mixV :: Vector (Pair (Maybe Object)) -> Object -> Object
-mixV (Vector (Pair left right) (Pair down up)) obj = foldl (flip mix) obj $ mapMaybe id [up, left, right, down]
-
 object :: Update
-object = blackBox (selectUpdater . runId <$$> (>$)) (updateObject Air)
-       >>> latch Air
-       >>> arr ((,) <*> spawn)
+object = (arr Just >>> updater mixNeighbours Air) &&& id
+       >>> arr (\(x, y) -> (x, (x, y)))
+       >>> map (blackBox advanceSpawn (Air, spawn Air))
     where
-        -- If the Object is changing, create a fresh updater
-        selectUpdater (x, s) = (x, updateObject <$> x <?> s)
+        advanceSpawn (o2, seeds) (o1, s) = (o2,) <$> runId (iff (o1 == o2) s (spawn o2) $< seeds)
 
-updateObject :: Object -> Stream Id Seeds (Maybe Object)
-updateObject o = arr Just >>> updater mixV o >>> diff o
+mixNeighbours :: Vector (Pair (Maybe Object)) -> Object -> Object
+mixNeighbours v obj = mixV v
     where
-        diff obj = Stream $ Id <$> (cast (/= obj) &&& diff)
+        mixV (Vector (Pair left right) (Pair down up)) = foldl (flip mix) obj $ mapMaybe id [up, left, right, down]
