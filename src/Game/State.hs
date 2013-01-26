@@ -10,6 +10,7 @@ module Game.State ( GameState (..)
 import Prelewd hiding ((!))
 
 import Control.Stream
+import Control.Stream.Either
 import Data.Ix
 import Data.Tuple
 import Storage.Array
@@ -23,12 +24,6 @@ import Game.Input
 import Game.Object
 import Game.Vector
 import Physics.Types
-
-lefts :: Stream Id (Either a b) (Maybe a)
-lefts = arr $ either Just (\_-> Nothing)
-
-rights :: Stream Id (Either a b) (Maybe b)
-rights = arr $ either (\_-> Nothing) Just
 
 sequence2 :: Applicative f => (f a, f b) -> f (a, b)
 sequence2 = uncurry (liftA2 (,))
