@@ -34,6 +34,9 @@ type Spawn = Vector (Pair Bool)
 type Seeds = Vector (Pair (Maybe Object))
 type Update = Stream Id Seeds (Object, Spawn)
 
+count :: (Foldable t, Eq a) => a -> t a -> Integer
+count x = foldr (\a -> if' (a == x) (+ 1)) 0
+
 all, none, gravity :: Spawn
 all = pure $ pure True
 none = pure $ pure False
@@ -67,7 +70,7 @@ mix Fire Air = Air
 
 mix Lava Fire = Fire
 mix Lava Grass = Fire
-mix Lava Water = Lava
+mix Lava Water = Air
 mix Lava Air = Air
 
 mix Water Fire = Air
@@ -88,6 +91,10 @@ object = (arr Just >>> updater mixNeighbours Air) &&& id
         advanceSpawn (o2, seeds) (o1, s) = (o2,) <$> runId (iff (o1 == o2) s (spawn o2) $< seeds)
 
 mixNeighbours :: Vector (Pair (Maybe Object)) -> Object -> Object
-mixNeighbours v obj = mixV v
+mixNeighbours v obj =
+            -- Rock mostly surrounded by Fire -> Lava
+            if obj == Rock && count (Just Fire) (toList v >>= pair (\x y -> [x, y])) >= 3
+            then Lava
+            else mixV v
     where
         mixV (Vector (Pair left right) (Pair down up)) = foldl (flip mix) obj $ mapMaybe id [up, left, right, down]

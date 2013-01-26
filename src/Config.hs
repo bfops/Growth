@@ -40,7 +40,7 @@ keymap = mapKeys CharKey $ fromList
        [ ('A', Select Fire)
        , ('S', Select Water)
        , ('D', Select Grass)
-       , ('F', Select Lava)
+       , ('F', Select Rock)
        , (' ', Step)
        ]
 
