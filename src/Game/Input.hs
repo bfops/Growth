@@ -18,4 +18,4 @@ import Physics.Types
 data Input = Select Object
            | Place Position
            | Step
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq)

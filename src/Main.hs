@@ -44,9 +44,9 @@ fromMoveEvent _ = Nothing
 mstream :: (Functor m, Monad m) => (a -> m b) -> Stream m a b
 mstream = lift . arr
 
--- | Coerce a Stream to take group of inputs. Produces Nothing for empty groups.
-extend :: Foldable t => Stream Id a b -> Stream Id (t a) (Maybe b)
-extend s = Stream $ Id . map extend . foldr iterate (Nothing, s)
+-- | Coerce a Stream to take chunks of inputs. Produces Nothing for empty groups.
+inChunks :: Foldable t => Stream Id a b -> Stream Id (t a) (Maybe b)
+inChunks s = Stream $ Id . map inChunks . foldr iterate (Nothing, s)
     where
         iterate :: a -> (Maybe b, Stream Id a b) -> (Maybe b, Stream Id a b)
         iterate x (_, Stream f) = map2 Just $ runId $ f x
@@ -66,10 +66,10 @@ main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
     where
         -- | Update the GameState by chunks of Events
         batchUpdate :: Stream Id [Event] (Maybe GameState)
-        batchUpdate = extend $ convertEvents >>> game
+        batchUpdate = inChunks $ convertEvents >>> game
 
 convertEvents :: Stream Id Event (Maybe Input)
-convertEvents = (mousePos &&& id) >>> arr (uncurry convertEvent)
+convertEvents = convertEvent <$> mousePos <*> id
     where
         convertEvent :: Position -> Event -> Maybe Input
         convertEvent _ (ButtonEvent _ Release) = Nothing
@@ -78,11 +78,11 @@ convertEvents = (mousePos &&& id) >>> arr (uncurry convertEvent)
         convertEvent _ _ = Nothing
 
 mousePos :: Stream Id Event Position
-mousePos = mouse >>> map (arr convertPos) >>> latch (error "No mouse pos")
+mousePos = arr fromMoveEvent
+         >>> map (arr convertPos)
+         -- GLFW should send a mouse event as the first event
+         >>> latch (error "No mouse pos")
     where
-        mouse :: Stream Id Event (Maybe OGL.Position)
-        mouse = arr fromMoveEvent
-
         convertPos :: OGL.Position -> Position
         convertPos (OGL.Position x y) = Vector (toInteger x `div` 25) (toInteger (800-y) `div` 25)
 

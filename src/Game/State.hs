@@ -25,9 +25,6 @@ import Game.Object
 import Game.Vector
 import Physics.Types
 
-sequence2 :: Applicative f => (f a, f b) -> f (a, b)
-sequence2 = uncurry (liftA2 (,))
-
 splitA :: Ix i => Array i (e, f) -> (Array i e, Array i f)
 splitA a = listArray (bounds a) *** listArray (bounds a) $ unzip $ elems a
 
@@ -51,15 +48,16 @@ updates = arr reshape >>> map creations >>> arr sequence
 
 -- | What to add into the game world
 creations :: Stream Id (Either Object Position) (Maybe Creation)
-creations = sequence2 <$> ((buffer <<< lefts) &&& rights)
+creations = liftA2 (,) <$> (buffer <<< lefts) <*> rights
     where
         buffer = updater (\x _-> Just x) Nothing
 
 update :: Either () Creation -> (Board, Array Position Update) -> (Board, Array Position Update)
 
-update (Right (obj, p)) (b, a) = let Id (result, s) = a ! p $< singleSpawn obj
+update (Right (obj, p)) (b, a) = let Id (result, s) = a!p $< singleSpawn obj
                                  in (b // [(p, result)], a // [(p, s)])
     where
+        singleSpawn :: Object -> Seeds
         singleSpawn = singleV (pure Nothing) Width . Pair Nothing . Just
 
 update (Left _) (b, a0) = splitA $ zipAWith (runId <$$> ($<)) a0 disseminate
