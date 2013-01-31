@@ -1,6 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude
            , FlexibleContexts
            , TemplateHaskell
+           , TupleSections
            #-}
 module Game.State ( GameState (..)
                   , tiles'
@@ -28,8 +29,14 @@ import Physics.Types
 splitA :: Ix i => Array i (e, f) -> (Array i e, Array i f)
 splitA a = listArray (bounds a) *** listArray (bounds a) $ unzip $ elems a
 
+infix 3 <%%>
+
+(<%%>) :: (Functor f, Functor g, Functor h) => f (g (a -> b)) -> h a -> f (g (h b))
+(<%%>) fg h = (<$> h) <$$> fg
+
 type Creation = (Object, Position)
-type Board = Array Position (Object, Spawn)
+type Board = Array Position Object
+type GameUpdate = Either () Creation
 
 newtype GameState = GameState { tiles :: Board }
 
@@ -39,7 +46,7 @@ $(memberTransformers ''GameState)
 game :: Stream Id (Maybe Input) GameState
 game = bind updates >>> updater update (initBoard, initGame) >>> arr (GameState . fst)
 
-updates :: Stream Id Input (Maybe (Either () Creation))
+updates :: Stream Id Input (Maybe GameUpdate)
 updates = arr reshape >>> map creations >>> arr sequence
     where
         reshape (Select o) = Right $ Left o
@@ -52,33 +59,27 @@ creations = liftA2 (,) <$> (buffer <<< lefts) <*> rights
     where
         buffer = updater (\x _-> Just x) Nothing
 
-update :: Either () Creation -> (Board, Array Position Update) -> (Board, Array Position Update)
+update :: GameUpdate -> (Board, Array Position Update) -> (Board, Array Position Update)
 
 update (Right (obj, p)) (b, a) = let Id (result, s) = a!p $< singleSpawn obj
                                  in (b // [(p, result)], a // [(p, s)])
     where
         singleSpawn :: Object -> Seeds
-        singleSpawn = singleV (pure Nothing) Width . Pair Nothing . Just
+        singleSpawn = singleV (pure Nothing) Height . Pair Nothing . Just
 
 update (Left _) (b, a0) = splitA $ zipAWith (runId <$$> ($<)) a0 disseminate
     where
         -- Propogate each Spawn to its neighbours, so each Position will have one Object from each neighbour
         disseminate :: Array Position Seeds
-        disseminate = listArray (bounds b) $ seeds <$> indices b
-
-        seeds p = dimensions <&> \d -> neighbour d <$> Pair False True <&> ($ p)
+        disseminate = listArray (bounds b) $ neighbour <$> indices b <%> dimensions <%%> Pair False True
 
         -- Find a neighbour in a given direction, and return the Object they're spawning towards the base position
-        neighbour dim pos p = do
-                    (obj, spwn) <- (b !) <$> checkBounds b (component' dim (iff pos (+) subtract 1) p)
-                    mcond (iff pos fst snd $ pair (,) $ component dim spwn) obj
-
-checkBounds :: Board -> Position -> Maybe Position
-checkBounds b = let (l, h) = bounds b
-                in cast (inRange (l, h))
+        neighbour :: Position -> Dimension -> Bool -> Maybe Object
+        neighbour p dim pos = let p' = component' dim (iff pos (+) subtract 1) p
+                              in mcond (inRange (bounds b) p') $ b!p'
 
 initGame :: Array Position Update
 initGame = listArray (0, 31) $ repeat object
 
 initBoard :: Board
-initBoard = initGame <&> \_-> (Air, pure $ pure True)
+initBoard = initGame <&> \_-> Air

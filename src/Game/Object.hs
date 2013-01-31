@@ -6,15 +6,17 @@ module Game.Object ( Object (..)
                    , Seeds
                    , Update
                    , object
-                   , Spawn
-                   , spawn
                    , mix
                    ) where
 
 import Prelewd hiding (all)
 
+import Impure
+
 import Control.Stream
+import Data.Tuple
 import Storage.Id
+import Storage.List
 import Storage.Pair
 import Text.Show
 
@@ -26,75 +28,61 @@ data Object = Fire
             | Water
             | Air
             | Rock
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq)
 
--- | The directions in which to spawn
-type Spawn = Vector (Pair Bool)
 -- | Spawns from a set of neighbours
 type Seeds = Vector (Pair (Maybe Object))
-type Update = Stream Id Seeds (Object, Spawn)
+type Update = Stream Id Seeds Object
 
 count :: (Foldable t, Eq a) => a -> t a -> Integer
 count x = foldr (\a -> if' (a == x) (+ 1)) 0
 
-all, none, gravity :: Spawn
-all = pure $ pure True
-none = pure $ pure False
-gravity = component' Height (\_-> Pair True False) all
+precedence :: Object -> Object -> Int
+precedence _ obj = length precList - (elemIndex obj precList <?> error ("No precedence for " <> show obj))
+    where precList = [ Lava, Water, Fire, Grass, Rock, Air ]
 
--- | What does an Object produce in neighbouring cells?
-spawn :: Object -> Stream Id Seeds Spawn
-spawn Fire = pure all
-spawn Lava = pure all
-spawn Grass = pure all
-spawn Water = pure gravity
-spawn Air = pure all
-spawn Rock = pure none
+-- | Combine one object into another
+mix :: Dimension -> Bool -> Object -> Object -> Object
 
--- | `mix a b` mixes a and b to produce a new b
-mix :: Object -> Object -> Object
+mix _ _ Air Lava = Rock
+mix _ _ _ Lava = Lava
 
-mix Air Lava = Rock
-mix _ Lava = Lava
+mix _ _ Lava Rock = Lava
+mix _ _ _ Rock = Rock
 
-mix Lava Rock = Lava
-mix _ Rock = Rock
+mix _ _ Air x = x
+mix _ _ Rock x = x
 
-mix Air x = x
-mix Rock _ = Rock
+mix _ _ Fire Fire = Fire
+mix _ _ Fire Grass = Fire
+mix _ _ Fire Water = Water
+mix _ _ Fire Air = Air
 
-mix Fire Fire = Fire
-mix Fire Grass = Fire
-mix Fire Water = Water
-mix Fire Air = Air
+mix _ _ Lava Fire = Fire
+mix _ _ Lava Grass = Fire
+mix _ _ Lava Water = Air
+mix _ _ Lava Air = Air
 
-mix Lava Fire = Fire
-mix Lava Grass = Fire
-mix Lava Water = Air
-mix Lava Air = Air
+mix _ _ Water Grass = Grass
+mix Height True Water x = x
+mix _ _ Water Water = Water
+mix _ _ Water Air = Water
+mix _ _ Water Fire = Water
 
-mix Water Fire = Air
-mix Water Grass = Grass
-mix Water Water = Water
-mix Water Air = Water
-
-mix Grass Fire = Fire
-mix Grass Grass = Grass
-mix Grass Water = Grass
-mix Grass Air = Air
+mix _ _ Grass Fire = Fire
+mix _ _ Grass Grass = Grass
+mix _ _ Grass Water = Grass
+mix _ _ Grass Air = Air
 
 object :: Update
-object = (arr Just >>> updater mixNeighbours Air) &&& id
-       >>> arr (\(x, y) -> (x, (x, y)))
-       >>> map (blackBox advanceSpawn (Air, spawn Air))
-    where
-        advanceSpawn (o2, seeds) (o1, s) = (o2,) <$> runId (iff (o1 == o2) s (spawn o2) $< seeds)
+object = arr Just >>> updater mixNeighbours Air
 
-mixNeighbours :: Vector (Pair (Maybe Object)) -> Object -> Object
+mixNeighbours :: Seeds -> Object -> Object
 mixNeighbours v obj =
             -- Rock mostly surrounded by Fire -> Lava
             if obj == Rock && count (Just Fire) (toList v >>= pair (\x y -> [x, y])) >= 3
             then Lava
-            else mixV v
+            else mixPrecedence $ toList ((,) <$$> (mix <$> dimensions <%> Pair True False) <**> v) >>= toList
     where
-        mixV (Vector (Pair left right) (Pair down up)) = foldl (flip mix) obj $ mapMaybe id [up, left, right, down]
+        mixPrecedence :: [(Object -> Object -> Object, Maybe Object)] -> Object
+        mixPrecedence = foldr (\(a, b) -> a b) obj . sortBy (compare `on` precedence obj . snd) . mapMaybe sequence
