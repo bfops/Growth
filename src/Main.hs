@@ -28,10 +28,6 @@ import Physics.Types
 
 import Main.Graphics
 
--- | Monad-level if
-ifm :: MonadPlus m => m Bool -> m a -> m a
-ifm b x = b >>= guard >> x
-
 -- | Loop with an iterator.. forever
 loop :: Monad m => (a -> m a) -> a -> m a
 loop f x = f x >>= loop f
@@ -44,38 +40,26 @@ fromMoveEvent _ = Nothing
 mstream :: (Functor m, Monad m) => (a -> m b) -> Stream m a b
 mstream = lift . arr
 
--- | Coerce a Stream to take chunks of inputs. Produces Nothing for empty groups.
-inChunks :: Foldable t => Stream Id a b -> Stream Id (t a) (Maybe b)
-inChunks s = Stream $ Id . map inChunks . foldr iterate (Nothing, s)
-    where
-        iterate :: a -> (Maybe b, Stream Id a b) -> (Maybe b, Stream Id a b)
-        iterate x (_, Stream f) = map2 Just $ runId $ f x
-
--- | Is the window open?
-isOpen :: EventPoller -> IO Bool
-isOpen poll = null <$> poll [CloseEvents]
-
 -- | Entry point
 main :: SystemIO ()
 main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
         initOpenGL
-        poll <- createEventPoller
-        loop (mainLoop poll) $ mstream (\_-> poll [ButtonEvents Nothing Nothing, MouseMoveEvents])
-                             >>> identify (batchUpdate >>> latch (error "First update was empty"))
-                             >>> mstream (updateGraphics poll)
-    where
-        -- | Update the GameState by chunks of Events
-        batchUpdate :: Stream Id [Event] (Maybe GameState)
-        batchUpdate = inChunks $ convertEvents >>> game
+        setUpEvents
+        loop mainLoop $ mstream (\_-> popEvent)
+                      >>> bind convertEvents
+                      >>> identify game
+                      >>> mstream updateGraphics
 
-convertEvents :: Stream Id Event (Maybe Input)
-convertEvents = convertEvent <$> mousePos <*> id
+convertEvents :: Stream IO Event (Maybe Input)
+convertEvents = lift $ convertEvent <$> identify mousePos <*> id
     where
-        convertEvent :: Position -> Event -> Maybe Input
-        convertEvent _ (ButtonEvent _ Release) = Nothing
-        convertEvent _ (ButtonEvent (KeyButton key) _) = lookup key keymap
-        convertEvent mouse (ButtonEvent (MouseButton MouseButton0) _) = Just $ clickAction mouse
-        convertEvent _ _ = Nothing
+        convertEvent :: Position -> Event -> IO (Maybe Input)
+        convertEvent _ CloseEvent = mzero
+        convertEvent _ (ResizeEvent s) = resize s $> Nothing
+        convertEvent _ (ButtonEvent _ Release) = return Nothing
+        convertEvent _ (ButtonEvent (KeyButton key) _) = return $ lookup key keymap
+        convertEvent mouse (ButtonEvent (MouseButton MouseButton0) _) = return $ Just $ clickAction mouse
+        convertEvent _ _ = return Nothing
 
 mousePos :: Stream Id Event Position
 mousePos = arr fromMoveEvent
@@ -86,5 +70,5 @@ mousePos = arr fromMoveEvent
         convertPos :: OGL.Position -> Position
         convertPos (OGL.Position x y) = Vector (toInteger x `div` 25) (toInteger (800-y) `div` 25)
 
-mainLoop :: EventPoller -> Stream IO () () -> IO (Stream IO () ())
-mainLoop poll s = ifm (isOpen poll) $ snd <$> s $< ()
+mainLoop :: Stream IO () () -> IO (Stream IO () ())
+mainLoop s = snd <$> s $< ()

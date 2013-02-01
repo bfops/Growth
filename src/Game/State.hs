@@ -15,7 +15,6 @@ import Control.Stream.Either
 import Data.Ix
 import Data.Tuple
 import Storage.Array
-import Storage.Either
 import Storage.Id
 import Storage.List
 import Storage.Pair
