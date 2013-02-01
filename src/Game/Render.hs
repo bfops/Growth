@@ -35,10 +35,12 @@ instance Drawable (Position, Object) where
     draw (p, o) = drawQuad (objColor o) p
         where
             objColor Fire = orange
-            objColor Water = blue
+            objColor (Water False) = blue
+            objColor (Water True) = Color4 0 0.25 0.75 1
             objColor Grass = green
             objColor Rock = grey
-            objColor Lava = red
+            objColor (Lava False) = red
+            objColor (Lava True) = Color4 0.6 0.1 0 1
             objColor Air = cyan
 
 -- | `draw c o` draws `o` as a quadrilateral, based on its position and size.

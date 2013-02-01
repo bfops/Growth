@@ -38,9 +38,9 @@ title = "Game"
 keymap :: Map Key Input
 keymap = mapKeys CharKey $ fromList
        [ ('A', Select Fire)
-       , ('S', Select Water)
+       , ('S', Select $ Water False)
        , ('D', Select Grass)
-       , ('F', Select Rock)
+       , ('F', Select $ Lava True)
        , (' ', Step)
        ]
 
