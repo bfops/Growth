@@ -44,21 +44,20 @@ mstream = lift . arr
 main :: SystemIO ()
 main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
         initOpenGL
-        setUpEvents
+        initEvents
         loop mainLoop $ mstream (\_-> popEvent)
                       >>> bind convertEvents
                       >>> identify game
                       >>> mstream updateGraphics
 
 convertEvents :: Stream IO Event (Maybe Input)
-convertEvents = lift $ convertEvent <$> identify mousePos <*> id
+convertEvents = lift $ convertEvent <$> mousePos <*> id
     where
         convertEvent :: Position -> Event -> IO (Maybe Input)
         convertEvent _ CloseEvent = mzero
         convertEvent _ (ResizeEvent s) = resize s $> Nothing
-        convertEvent _ (ButtonEvent _ Release) = return Nothing
-        convertEvent _ (ButtonEvent (KeyButton key) _) = return $ lookup key keymap
-        convertEvent mouse (ButtonEvent (MouseButton MouseButton0) _) = return $ Just $ clickAction mouse
+        convertEvent _ (ButtonEvent (KeyButton key) Press) = return $ lookup key keymap
+        convertEvent mouse (ButtonEvent (MouseButton MouseButton0) Press) = return $ Just $ clickAction mouse
         convertEvent _ _ = return Nothing
 
 mousePos :: Stream Id Event Position
