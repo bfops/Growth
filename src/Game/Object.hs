@@ -22,6 +22,9 @@ import Text.Show
 
 import Game.Vector
 
+count :: Foldable t => (a -> Bool) -> t a -> Integer
+count p = foldr (\x -> if' (p x) (+ 1)) 0
+
 data Object = Fire
             | Lava Bool
             | Grass
@@ -37,63 +40,55 @@ type Update = Stream Id Seeds Object
 precedence :: Object -> Object -> Int
 precedence _ obj = length precList - (elemIndex obj precList <?> error ("No precedence for " <> show obj))
     where
-        precList = [ Lava False, Water True, Water False, Fire, Grass, Rock, Air, Lava True ]
+        precList = [ Water True, Water False, Lava False, Fire, Grass, Rock, Air, Lava True ]
 
 -- | Combine one object into another
 mix :: Dimension -> Bool -> Object -> Object -> Object
 
 mix _ _ Air (Lava False) = Rock
-mix Height True (Lava True) (Lava _) = Lava False
-mix _ _ _ (Lava b) = Lava b
-
-mix Height True (Lava True) Rock = Lava True
-mix _ _ (Lava _) Rock = Lava False
-mix _ _ _ Rock = Rock
 
 mix Height True Air (Water _) = Water False
-mix _ _ Air x = x
 mix Height True Rock (Water _) = Water True
-mix _ _ Rock x = x
 
-mix _ _ Fire Fire = Fire
 mix _ _ Fire Grass = Fire
 mix Height True Fire (Water _) = Water False
-mix _ _ Fire (Water b) = Water b
-mix _ _ Fire Air = Air
 
-mix _ _ (Lava False) Fire = Fire
 mix _ _ (Lava False) Grass = Fire
 mix _ _ (Lava False) (Water _) = Air
-mix _ _ (Lava False) Air = Air
+mix _ _ (Lava False) Rock = Lava False
 
+mix Height True (Lava True) Rock = Lava True
 mix _ _ (Lava True) _ = Lava False
 
-mix _ _ (Water _) Grass = Grass
 mix Height True (Water _) (Water _) = Water False
 mix Height True (Water _) x = x
-mix Height False (Water _) (Water b) = Water b
 mix Width _ (Water False) x = x
 mix Width _ (Water True) (Water _) = Water True
-mix _ _ (Water b) _ = Water b
+mix _ _ (Water b) Fire = Water b
+mix _ _ (Water b) Air = Water b
 
-mix _ _ Grass Fire = Fire
-mix _ _ Grass Grass = Grass
 mix _ _ Grass (Water _) = Grass
-mix _ _ Grass Air = Air
+
+mix _ _ _ x = x
 
 object :: Update
 object = arr Just >>> updater mixNeighbours Air
 
-mixNeighbours :: Seeds -> Object -> Object
-mixNeighbours v obj =
-        -- Rock mostly surrounded by Fire -> Lava
-        if obj == Rock && length (filter (Just Fire ==) $ toList v >>= toList) >= (3 :: Integer)
-        || obj == Lava False && volcano v
-        then Lava True
-        else mixPrecedence $ toList ((,) <$$> (mix <$> dimensions <%> Pair True False) <**> v) >>= toList
+mixPrecedence :: Seeds -> Object -> Object
+mixPrecedence v obj = foo $ toList ((,) <$$> (mix <$> dimensions <%> Pair True False) <**> v) >>= toList
     where
-        mixPrecedence :: [(Object -> Object -> Object, Maybe Object)] -> Object
-        mixPrecedence = foldr (\(a, b) -> a b) obj . sortBy (compare `on` precedence obj . snd) . mapMaybe sequence
+        foo :: [(Object -> Object -> Object, Maybe Object)] -> Object
+        foo = foldr (\(a, b) -> a b) obj . sortBy (compare `on` precedence obj . snd) . mapMaybe sequence
 
+mixNeighbours :: Seeds -> Object -> Object
+mixNeighbours v (Lava b) = iff (volcano v) (Lava True) $ mixPrecedence v $ Lava b
+    where
         volcano (Vector (Pair (Just (Lava _)) (Just (Lava _))) (Pair (Just (Lava _)) (Just Rock))) = True
         volcano _ = False
+mixNeighbours v Rock = if count (Just Fire ==) (toList v >>= toList) >= 3
+                       then Lava True
+                       else mixPrecedence v Rock
+mixNeighbours v (Water b) = case (mixPrecedence v $ Water b, v) of
+                                (Water _, Vector _ (Pair (Just (Water _)) _)) -> Water False
+                                (x, _) -> x
+mixNeighbours v obj = mixPrecedence v obj
