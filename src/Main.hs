@@ -36,19 +36,19 @@ fromMoveEvent :: Event -> Maybe (OGL.Position)
 fromMoveEvent (MouseMoveEvent p) = Just p
 fromMoveEvent _ = Nothing
 
--- | Lift a Monadic Stream
-mstream :: (Functor m, Monad m) => (a -> m b) -> Stream m a b
-mstream = lift . arr
+-- | Coerce a Stream to take chunks of inputs. Produces Nothing for empty groups.
+inChunks :: (Functor m, Monad m, Foldable t) => Stream m a b -> Stream m (t a) b
+inChunks s0 = updateSeveral s0 >>> identify (latch $ error "First update empty")
+    where
+        updateSeveral s = Stream $ \l -> updateSeveral <$$> foldrM iterate (Nothing, s) l
+        iterate x (_, Stream f) = map2 Just <$> f x
 
 -- | Entry point
 main :: SystemIO ()
 main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
         initOpenGL
         initEvents
-        loop mainLoop $ mstream (\_-> popEvent)
-                      >>> bind convertEvents
-                      >>> identify game
-                      >>> mstream updateGraphics
+        loop mainLoop $ events >>> inChunks (convertEvents >>> identify game) >>> lift (arr updateGraphics)
 
 convertEvents :: Stream IO Event (Maybe Input)
 convertEvents = lift $ convertEvent <$> mousePos <*> id
