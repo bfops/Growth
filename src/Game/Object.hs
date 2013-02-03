@@ -22,9 +22,6 @@ import Text.Show
 
 import Game.Vector
 
-count :: Foldable t => (a -> Bool) -> t a -> Integer
-count p = foldr (\x -> if' (p x) (+ 1)) 0
-
 data Object = Fire
             | Lava Bool
             | Grass
@@ -36,6 +33,16 @@ data Object = Fire
 -- | Spawns from a set of neighbours
 type Seeds = Vector (Pair (Maybe Object))
 type Update = Stream Id Seeds Object
+
+water :: Maybe Object -> Bool
+water (Just (Water _)) = True
+water _ = False
+
+-- | What is travelling up in these Seeds?
+up :: Seeds -> Maybe Object
+(Vector _ (Pair _ up)) = getObj <$> dimensions <%> Pair snd fst
+    where
+        getObj dim f = f . pair (,) . component dim
 
 precedence :: Object -> Object -> Int
 precedence _ obj = length precList - (elemIndex obj precList <?> error ("No precedence for " <> show obj))
@@ -69,26 +76,30 @@ mix _ _ (Water b) Air = Water b
 
 mix _ _ Grass (Water _) = Grass
 
-mix _ _ _ x = x
+mix _ _ _ obj = obj
 
 object :: Update
-object = arr Just >>> updater mixNeighbours Air
-
-mixPrecedence :: Seeds -> Object -> Object
-mixPrecedence v obj = foo $ toList ((,) <$$> (mix <$> dimensions <%> Pair True False) <**> v) >>= toList
+object = arr Just >>> updater updateObject (accum Air) >>> arr fst
     where
-        foo :: [(Object -> Object -> Object, Maybe Object)] -> Object
-        foo = foldr (\(a, b) -> a b) obj . sortBy (compare `on` precedence obj . snd) . mapMaybe sequence
+        accum obj = (obj, objectUpdate obj)
+        updateObject seeds (obj, s) = nextAccum obj $ (Left <$> mixNeighbours obj seeds <?> Right ()) >> (s $< seeds)
+        nextAccum obj = either accum $ (obj,) . snd
 
-mixNeighbours :: Seeds -> Object -> Object
-mixNeighbours v (Lava b) = iff (volcano v) (Lava True) $ mixPrecedence v $ Lava b
+objectUpdate :: Object -> Stream (Either Object) Seeds ()
+
+objectUpdate (Lava False) = lift $ arr $ \seeds -> iff (volcano seeds) (Left $ Lava True) $ Right ()
     where
         volcano (Vector (Pair (Just (Lava _)) (Just (Lava _))) (Pair (Just (Lava _)) (Just Rock))) = True
         volcano _ = False
-mixNeighbours v Rock = if count (Just Fire ==) (toList v >>= toList) >= 3
-                       then Lava True
-                       else mixPrecedence v Rock
-mixNeighbours v (Water b) = case (mixPrecedence v $ Water b, v) of
-                                (Water _, Vector _ (Pair (Just (Water _)) _)) -> Water False
-                                (x, _) -> x
-mixNeighbours v obj = mixPrecedence v obj
+
+objectUpdate (Water True) = lift $ arr $ \seeds -> iff (water $ up seeds) (Left $ Water False) $ Right ()
+
+objectUpdate _ = pure ()
+
+mixNeighbours :: Object -> Seeds -> Maybe Object
+mixNeighbours obj s = let
+            mixes = mix <$> dimensions <%> Pair True False
+        in cast (/= obj) $ applyMixes $ toList ((,) <$$> mixes <**> s) >>= toList
+    where
+        applyMixes :: [(Object -> Object -> Object, Maybe Object)] -> Object
+        applyMixes = foldr (\(a, b) -> a b) obj . sortBy (compare `on` precedence obj . snd) . mapMaybe sequence
