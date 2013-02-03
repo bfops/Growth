@@ -28,6 +28,7 @@ data Object = Fire
             | Water Bool
             | Air
             | Rock
+            | Dirt
     deriving (Show, Eq)
 
 -- | Spawns from a set of neighbours
@@ -38,24 +39,31 @@ water :: Maybe Object -> Bool
 water (Just (Water _)) = True
 water _ = False
 
+dirt :: Maybe Object -> Bool
+dirt = (== Just Dirt)
+
 -- | What is travelling up in these Seeds?
 up :: Seeds -> Maybe Object
 (Vector _ (Pair _ up)) = getObj <$> dimensions <%> Pair snd fst
     where
         getObj dim f = f . pair (,) . component dim
 
+count :: (Maybe Object -> Bool) -> Seeds -> Integer
+count p = foldr (flip $ foldr $ \x -> if' (p x) (+ 1)) 0
+
 precedence :: Object -> Object -> Int
 precedence _ obj = length precList - (elemIndex obj precList <?> error ("No precedence for " <> show obj))
     where
-        precList = [ Water True, Water False, Lava False, Fire, Grass, Rock, Air, Lava True ]
+        precList = [ Water True, Water False, Lava False, Fire, Grass, Dirt, Rock, Air, Lava True ]
 
 -- | Combine one object into another
 mix :: Dimension -> Bool -> Object -> Object -> Object
 
 mix _ _ Air (Lava False) = Rock
 
-mix Height True Air (Water _) = Water False
 mix Height True Rock (Water _) = Water True
+mix Height True Dirt (Water _) = Water True
+mix Height True Air (Water _) = Water False
 
 mix _ _ Fire Grass = Fire
 mix Height True Fire (Water _) = Water False
@@ -63,6 +71,7 @@ mix Height True Fire (Water _) = Water False
 mix _ _ (Lava False) Grass = Fire
 mix _ _ (Lava False) (Water _) = Air
 mix _ _ (Lava False) Rock = Lava False
+mix _ _ (Lava False) Dirt = Lava False
 
 mix Height True (Lava True) Rock = Lava True
 mix _ _ (Lava True) _ = Lava False
@@ -70,11 +79,8 @@ mix _ _ (Lava True) _ = Lava False
 mix Height True (Water _) (Water _) = Water False
 mix Height True (Water _) x = x
 mix Width _ (Water False) x = x
-mix Width _ (Water True) (Water _) = Water True
 mix _ _ (Water b) Fire = Water b
 mix _ _ (Water b) Air = Water b
-
-mix _ _ Grass (Water _) = Grass
 
 mix _ _ _ obj = obj
 
@@ -85,6 +91,11 @@ object = arr Just >>> updater updateObject (accum Air) >>> arr fst
         updateObject seeds (obj, s) = nextAccum obj $ (Left <$> mixNeighbours obj seeds <?> Right ()) >> (s $< seeds)
         nextAccum obj = either accum $ (obj,) . snd
 
+counter :: (Maybe Object -> Bool) -> Object -> Integer -> Stream (Either Object) Seeds ()
+counter p obj m = lift $ arr Just
+                    >>> updater ((+) . count p) 0
+                    >>> arr (\n -> iff (n >= m) (Left obj) $ Right ())
+
 objectUpdate :: Object -> Stream (Either Object) Seeds ()
 
 objectUpdate (Lava False) = lift $ arr $ \seeds -> iff (volcano seeds) (Left $ Lava True) $ Right ()
@@ -93,6 +104,10 @@ objectUpdate (Lava False) = lift $ arr $ \seeds -> iff (volcano seeds) (Left $ L
         volcano _ = False
 
 objectUpdate (Water True) = lift $ arr $ \seeds -> iff (water $ up seeds) (Left $ Water False) $ Right ()
+
+objectUpdate Rock = counter water Dirt 32
+
+objectUpdate Air = counter dirt Grass 32
 
 objectUpdate _ = pure ()
 

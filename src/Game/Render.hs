@@ -42,6 +42,7 @@ instance Drawable (Position, Object) where
             objColor (Lava False) = red
             objColor (Lava True) = Color4 0.6 0.1 0 1
             objColor Air = cyan
+            objColor Dirt = Color4 0.3 0.2 0 1
 
 -- | `draw c o` draws `o` as a quadrilateral, based on its position and size.
 drawQuad :: Color4 GLdouble -> Position -> IO ()
