@@ -84,8 +84,8 @@ mix _ _ (Water b) Air = Water b
 
 mix _ _ _ obj = obj
 
-object :: Update
-object = arr Just >>> updater updateObject (accum Air) >>> arr fst
+object :: Object -> Update
+object initObj = arr Just >>> updater updateObject (accum initObj) >>> arr fst
     where
         accum obj = (obj, objectUpdate obj)
         updateObject seeds (obj, s) = nextAccum obj $ (Left <$> mixNeighbours obj seeds <?> Right ()) >> (s $< seeds)

@@ -60,11 +60,7 @@ creations = liftA2 (,) <$> (buffer <<< lefts) <*> rights
 
 update :: GameUpdate -> (Board, Array Position Update) -> (Board, Array Position Update)
 
-update (Right (obj, p)) (b, a) = let Id (result, s) = a!p $< singleSpawn obj
-                                 in (b // [(p, result)], a // [(p, s)])
-    where
-        singleSpawn :: Object -> Seeds
-        singleSpawn = singleV (pure Nothing) Height . Pair Nothing . Just
+update (Right (obj, p)) (b, a) = (b // [(p, obj)], a // [(p, object obj)])
 
 update (Left _) (b, a0) = splitA $ zipAWith (runId <$$> ($<)) a0 disseminate
     where
@@ -78,7 +74,7 @@ update (Left _) (b, a0) = splitA $ zipAWith (runId <$$> ($<)) a0 disseminate
                               in mcond (inRange (bounds b) p') $ b!p'
 
 initGame :: Array Position Update
-initGame = listArray (0, 31) $ repeat object
+initGame = object <$> initBoard
 
 initBoard :: Board
-initBoard = initGame <&> \_-> Air
+initBoard = listArray (0, 31) $ repeat Air

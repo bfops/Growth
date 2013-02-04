@@ -39,7 +39,7 @@ keymap :: Map Key Input
 keymap = mapKeys CharKey $ fromList
        [ (' ', Step)
        , ('A', Select $ Water False)
-       , ('S', Select $ Lava True)
+       , ('S', Select $ Lava False)
        ]
 
 clickAction :: Position -> Input
