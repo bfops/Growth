@@ -103,14 +103,14 @@ behaviours Fire = [magmify, hydrophilic]
 behaviours Grass = [magmify, conduct Fire, mix (Just $ Lava False) Fire]
 
 behaviours (Water b) = let switch = wait (iff b transparent solid . down) $ Water $ not b
-                         in [magmify, mix (Just $ Lava False) Air, switch]
+                       in [magmify, mix (Just $ Lava False) Air, switch]
 
 behaviours (Lava b) = [wait volcano (Lava True), iff b despawn $ mix (Just Air) Rock]
     where
         volcano (Vector (Pair (Just (Lava _)) (Just (Lava _))) (Pair (Just (Lava _)) (Just Rock))) = True
         volcano _ = False
 
-        despawn = wait (all $ all lava) $ Lava False
+        despawn = wait (all $ all $ lava <&> (||) <*> (== Just Rock)) $ Lava False
 
 behaviours Rock =
         [ counter water Dirt 32
@@ -122,7 +122,9 @@ behaviours Rock =
     where
         volcano = wait ((Just (Lava True) ==) . down <&> (&&) <*> molten . left <&> (&&) <*> molten . right) $ Lava True
 
-        smelt = wait (any (any $ (== Just (Lava False))) <&> (&&) <*> all (all $ (/= Just Air))) $ Lava False
+        smelt = wait (any (any $ (== Just (Lava False))) <&> (&&) <*> all (all $ not . cold)) $ Lava False
+
+        cold obj = obj == Just Air || water obj
 
         molten (Just Rock) = True
         molten (Just (Lava _)) = True
