@@ -9,14 +9,12 @@ module Game.Object ( Object (..)
                    , mix
                    ) where
 
-import Prelewd hiding (all)
-
-import Impure
+import Prelewd
 
 import Control.Stream
 import Data.Tuple
 import Storage.Id
-import Storage.List
+import Storage.Member
 import Storage.Pair
 import Text.Show
 
@@ -34,87 +32,101 @@ data Object = Fire
 -- | Spawns from a set of neighbours
 type Seeds = Vector (Pair (Maybe Object))
 type Update = Stream Id Seeds Object
+type Behaviour = Stream (Either Object) Seeds ()
 
-water :: Maybe Object -> Bool
+-- | What Object is in which neighbour?
+left, right, down, up :: Seeds -> Maybe Object
+(Vector (Pair left right) (Pair down up)) = getObj <$> dimensions <%> Pair fst snd
+    where
+        getObj dim f = f . pair (,) . component dim
+
+water, lava, dirt, transparent, solid :: Maybe Object -> Bool
+
 water (Just (Water _)) = True
 water _ = False
 
-dirt :: Maybe Object -> Bool
 dirt = (== Just Dirt)
 
--- | What is travelling up in these Seeds?
-up :: Seeds -> Maybe Object
-(Vector _ (Pair _ up)) = getObj <$> dimensions <%> Pair snd fst
+lava (Just (Lava _)) = True
+lava _ = False
+
+transparent = (`elem` lst)
     where
-        getObj dim f = f . pair (,) . component dim
+        lst = Just <$> [Water False, Water True, Fire, Air]
+
+solid = (`elem` lst)
+    where
+        lst = Just <$> [Grass, Rock, Dirt]
+
+mix :: Maybe Object -> Object -> Behaviour
+mix obj result = wait (any $ any (== obj)) result
+
+conduct :: Object -> Behaviour
+conduct = mix =<< Just
+
+magmify, hydrophilic :: Behaviour
+
+magmify = mix (Just $ Lava True) $ Lava False
+
+hydrophilic = sequence_ [wait (water . up) $ Water False, wait flow $ Water True]
+    where
+        sideWater = (== Just (Water True))
+        flow = sideWater . left <&> (||) <*> sideWater . right
 
 count :: (Maybe Object -> Bool) -> Seeds -> Integer
 count p = foldr (flip $ foldr $ \x -> if' (p x) (+ 1)) 0
 
-precedence :: Object -> Object -> Int
-precedence _ obj = length precList - (elemIndex obj precList <?> error ("No precedence for " <> show obj))
-    where
-        precList = [ Water True, Water False, Lava False, Fire, Grass, Dirt, Rock, Air, Lava True ]
-
--- | Combine one object into another
-mix :: Dimension -> Bool -> Object -> Object -> Object
-
-mix _ _ Air (Lava False) = Rock
-
-mix Height True Rock (Water _) = Water True
-mix Height True Dirt (Water _) = Water True
-mix Height True Air (Water _) = Water False
-
-mix _ _ Fire Grass = Fire
-mix Height True Fire (Water _) = Water False
-
-mix _ _ (Lava False) Grass = Fire
-mix _ _ (Lava False) (Water _) = Air
-mix _ _ (Lava False) Rock = Lava False
-mix _ _ (Lava False) Dirt = Lava False
-
-mix Height True (Lava True) Rock = Lava True
-mix _ _ (Lava True) _ = Lava False
-
-mix Height True (Water _) (Water _) = Water False
-mix Height True (Water _) x = x
-mix Width _ (Water False) x = x
-mix _ _ (Water b) Fire = Water b
-mix _ _ (Water b) Air = Water b
-
-mix _ _ _ obj = obj
-
 object :: Object -> Update
-object initObj = arr Just >>> updater updateObject (accum initObj) >>> arr fst
+object initObj = blackBox updateObject ([initObj], behaviour initObj) >>> latch initObj
     where
-        accum obj = (obj, objectUpdate obj)
-        updateObject seeds (obj, s) = nextAccum obj $ (Left <$> mixNeighbours obj seeds <?> Right ()) >> (s $< seeds)
-        nextAccum obj = either accum $ (obj,) . snd
+        behaviour obj = sequence_ $ behaviours obj
+        updateObject seeds (hist, s) = case s $< seeds of
+                    Left obj -> if elem obj hist
+                                then (Just obj, ([obj], behaviour obj))
+                                else case updateObject seeds (obj:hist, behaviour obj) of
+                                    (Nothing, _) -> (Just obj, ([obj], behaviour obj))
+                                    x -> x
+                    Right (_, s') -> (Nothing, (hist, s'))
+
+flagBehaviour :: Object -> Stream Id Seeds Bool -> Behaviour
+flagBehaviour obj s = lift $ s >>> arr (\b -> iff b (Left obj) $ Right ())
 
 counter :: (Maybe Object -> Bool) -> Object -> Integer -> Stream (Either Object) Seeds ()
-counter p obj m = lift $ arr Just
-                    >>> updater ((+) . count p) 0
-                    >>> arr (\n -> iff (n >= m) (Left obj) $ Right ())
+counter p obj m = flagBehaviour obj $ arr Just >>> updater ((+) . count p) 0 >>> arr (>= m)
 
-objectUpdate :: Object -> Stream (Either Object) Seeds ()
+wait :: (Seeds -> Bool) -> Object -> Behaviour
+wait p obj = flagBehaviour obj $ arr p
 
-objectUpdate (Lava False) = lift $ arr $ \seeds -> iff (volcano seeds) (Left $ Lava True) $ Right ()
+behaviours :: Object -> [Behaviour]
+
+behaviours Fire = [magmify, hydrophilic]
+behaviours Grass = [magmify, conduct Fire, mix (Just $ Lava False) Fire]
+
+behaviours (Water b) = let switch = wait (iff b transparent solid . down) $ Water $ not b
+                         in [magmify, mix (Just $ Lava False) Air, switch]
+
+behaviours (Lava b) = [wait volcano (Lava True), iff b despawn $ mix (Just Air) Rock]
     where
         volcano (Vector (Pair (Just (Lava _)) (Just (Lava _))) (Pair (Just (Lava _)) (Just Rock))) = True
         volcano _ = False
 
-objectUpdate (Water True) = lift $ arr $ \seeds -> iff (water $ up seeds) (Left $ Water False) $ Right ()
+        despawn = wait (all $ all lava) $ Lava False
 
-objectUpdate Rock = counter water Dirt 32
-
-objectUpdate Air = counter dirt Grass 32
-
-objectUpdate _ = pure ()
-
-mixNeighbours :: Object -> Seeds -> Maybe Object
-mixNeighbours obj s = let
-            mixes = mix <$> dimensions <%> Pair True False
-        in cast (/= obj) $ applyMixes $ toList ((,) <$$> mixes <**> s) >>= toList
+behaviours Rock =
+        [ counter water Dirt 32
+        , volcano
+        , smelt
+        , magmify
+        ]
     where
-        applyMixes :: [(Object -> Object -> Object, Maybe Object)] -> Object
-        applyMixes = foldr (\(a, b) -> a b) obj . sortBy (compare `on` precedence obj . snd) . mapMaybe sequence
+        volcano = wait ((Just (Lava True) ==) . down <&> (&&) <*> molten . left <&> (&&) <*> molten . right) $ Lava True
+
+        smelt = wait (any (any $ (== Just (Lava False))) <&> (&&) <*> all (all $ (/= Just Air))) $ Lava False
+
+        molten (Just Rock) = True
+        molten (Just (Lava _)) = True
+        molten _ = False
+
+behaviours Dirt = [conduct $ Lava False, magmify]
+
+behaviours Air = [magmify, hydrophilic, counter dirt Grass 32]
