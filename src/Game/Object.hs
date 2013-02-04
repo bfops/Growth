@@ -114,6 +114,7 @@ behaviours (Lava b) = [wait volcano (Lava True), iff b despawn $ mix (Just Air) 
 
 behaviours Rock =
         [ counter water Dirt 32
+        , counter (== Just Fire) (Lava False) 16
         , volcano
         , smelt
         , magmify
