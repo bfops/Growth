@@ -11,15 +11,21 @@ module Game.Object ( Object (..)
 
 import Prelewd
 
+import Impure
+
 import Control.Stream
 import Data.Tuple
 import Storage.Id
+import Storage.List
+import Storage.Map
 import Storage.Member
 import Storage.Pair
+import Storage.Set
 import Text.Show
 
 import Game.Vector
 
+-- | Ordering is arbitrary, but deterministic
 data Object = Fire
             | Lava Bool
             | Grass
@@ -27,7 +33,7 @@ data Object = Fire
             | Air
             | Rock
             | Dirt
-    deriving (Show, Eq)
+    deriving (Show, Eq, Ord)
 
 -- | Spawns from a set of neighbours
 type Seeds = Vector (Pair (Maybe Object))
@@ -58,6 +64,16 @@ solid = (`elem` lst)
     where
         lst = Just <$> [Grass, Rock, Dirt]
 
+resolveCycle :: Set Object -> Object
+resolveCycle c = if length c == (1 :: Integer)
+                 then minimum c
+                 else lookup c cycles <?> error ("No cycle resolution for " <> show c)
+    where
+        cycles = fromList
+            [ (set [Rock, Lava False], Rock)
+            , (set [Lava False, Lava True], Lava True)
+            ]
+
 mix :: Maybe Object -> Object -> Behaviour
 mix obj result = wait (any $ any (== obj)) result
 
@@ -79,12 +95,13 @@ count p = foldr (flip $ foldr $ \x -> if' (p x) (+ 1)) 0
 object :: Object -> Update
 object initObj = blackBox updateObject ([initObj], behaviour initObj) >>> latch initObj
     where
+        accum obj = (Just obj, ([obj], behaviour obj))
         behaviour obj = sequence_ $ behaviours obj
         updateObject seeds (hist, s) = case s $< seeds of
                     Left obj -> if elem obj hist
-                                then (Just obj, ([obj], behaviour obj))
+                                then accum $ resolveCycle $ set $ obj : takeWhile (/= obj) hist
                                 else case updateObject seeds (obj:hist, behaviour obj) of
-                                    (Nothing, _) -> (Just obj, ([obj], behaviour obj))
+                                    (Nothing, _) -> accum obj
                                     x -> x
                     Right (_, s') -> (Nothing, (hist, s'))
 
@@ -116,15 +133,11 @@ behaviours Rock =
         [ counter water Dirt 32
         , counter (== Just Fire) (Lava False) 16
         , volcano
-        , smelt
+        , conduct $ Lava False
         , magmify
         ]
     where
         volcano = wait ((Just (Lava True) ==) . down <&> (&&) <*> molten . left <&> (&&) <*> molten . right) $ Lava True
-
-        smelt = wait (any (any $ (== Just (Lava False))) <&> (&&) <*> all (all $ not . cold)) $ Lava False
-
-        cold obj = obj == Just Air || water obj
 
         molten (Just Rock) = True
         molten (Just (Lava _)) = True
