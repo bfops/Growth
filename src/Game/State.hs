@@ -4,6 +4,7 @@
            , TupleSections
            #-}
 module Game.State ( GameState (..)
+                  , Input (..)
                   , tiles'
                   , game
                   ) where 
@@ -19,8 +20,8 @@ import Storage.Id
 import Storage.List
 import Storage.Pair
 import Template.MemberTransformer
+import Text.Show
 
-import Game.Input
 import Game.Object
 import Game.Vector
 import Physics.Types
@@ -32,6 +33,12 @@ infix 3 <%%>
 
 (<%%>) :: (Functor f, Functor g, Functor h) => f (g (a -> b)) -> h a -> f (g (h b))
 (<%%>) fg h = (<$> h) <$$> fg
+
+-- | Input events understood by the game
+data Input = Select Object
+           | Place Position
+           | Step
+    deriving (Show, Eq)
 
 type Creation = (Object, Position)
 type Board = Array Position Object

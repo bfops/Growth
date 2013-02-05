@@ -12,8 +12,8 @@ import Prelewd
 
 import Storage.Map
 
-import Game.Input
 import Game.Object
+import Game.State
 import Physics.Types
 import Wrappers.Events
 import Wrappers.GLFW (DisplayOptions (..), defaultDisplayOptions)
