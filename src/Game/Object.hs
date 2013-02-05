@@ -72,6 +72,8 @@ resolveCycle c = if length c == (1 :: Integer)
         cycles = fromList
             [ (set [Rock, Lava False], Rock)
             , (set [Lava False, Lava True], Lava True)
+            , (set [Water True, Air], Air)
+            , (set [Water False, Air], Air)
             ]
 
 mix :: Maybe Object -> Object -> Behaviour
@@ -122,10 +124,12 @@ behaviours Grass = [magmify, conduct Fire, mix (Just $ Lava False) Fire]
 behaviours (Water b) = let switch = wait (iff b transparent solid . down) $ Water $ not b
                        in [magmify, mix (Just $ Lava False) Air, switch]
 
-behaviours (Lava b) = [wait volcano (Lava True), iff b despawn $ mix (Just Air) Rock]
+behaviours (Lava b) = [wait volcano (Lava True), iff b despawn $ wait (any $ any cold) Rock]
     where
         volcano (Vector (Pair (Just (Lava _)) (Just (Lava _))) (Pair (Just (Lava _)) (Just Rock))) = True
         volcano _ = False
+
+        cold obj = obj == Just Air || water obj
 
         despawn = wait (all $ all $ lava <&> (||) <*> (== Just Rock)) $ Lava False
 
