@@ -38,9 +38,10 @@ title = "Game"
 keymap :: Map Key Input
 keymap = mapKeys CharKey $ fromList
        [ (' ', Step)
-       , ('A', Select $ Water True False)
-       , ('S', Select Rock)
-       , ('D', Select Fire)
+       , ('A', Select Air)
+       , ('W', Select $ Water True False)
+       , ('R', Select Rock)
+       , ('F', Select Fire)
        ]
 
 clickAction :: Position -> Input
