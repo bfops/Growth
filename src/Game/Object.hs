@@ -15,12 +15,12 @@ import Impure
 
 import Control.Stream
 import Data.Tuple
+import Storage.Cycle
 import Storage.Id
-import Storage.List
+import Storage.List hiding (cycle)
 import Storage.Map
 import Storage.Member
 import Storage.Pair
-import Storage.Set
 import Text.Show
 
 import Game.Vector
@@ -64,16 +64,15 @@ solid = (`elem` lst)
     where
         lst = Just <$> [Grass, Rock, Dirt]
 
-resolveCycle :: Set Object -> Object
-resolveCycle c = if length c == (1 :: Integer)
-                 then minimum c
-                 else lookup c cycles <?> error ("No cycle resolution for " <> show c)
+resolveCycle :: [Object] -> Object
+resolveCycle [obj] = obj
+resolveCycle c = lookup (cycle c) cycles <?> error ("No cycle resolution for " <> show c)
     where
-        cycles = fromList
-            [ (set [Rock, Lava False], Rock)
-            , (set [Lava False, Lava True], Lava True)
-            , (set [Water True, Air], Air)
-            , (set [Water False, Air], Air)
+        cycles = fromList $
+            [ (cycle [Rock, Lava False], Rock)
+            , (cycle [Lava False, Lava True], Lava True)
+            , (cycle [Water True, Air], Air)
+            , (cycle [Water False, Air], Air)
             ]
 
 mix :: Maybe Object -> Object -> Behaviour
@@ -101,7 +100,7 @@ object initObj = blackBox updateObject ([initObj], behaviour initObj) >>> latch 
         behaviour obj = sequence_ $ behaviours obj
         updateObject seeds (hist, s) = case s $< seeds of
                     Left obj -> if elem obj hist
-                                then accum $ resolveCycle $ set $ obj : takeWhile (/= obj) hist
+                                then accum $ resolveCycle $ reverse $ obj : takeWhile (/= obj) hist
                                 else case updateObject seeds (obj:hist, behaviour obj) of
                                     (Nothing, _) -> accum obj
                                     x -> x
