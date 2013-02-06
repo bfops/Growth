@@ -19,9 +19,12 @@ import Physics.Types
 
 import Wrappers.OpenGL hiding (Size, Position)
 
+import Config
+
 -- | Convert the game's vector to an OpenGL coordinate
 toGLVertex :: Position -> Vertex2 GLdouble
-toGLVertex p = on Vertex2 (subtract 1 . (0.0625*).realToFrac) (component Width p) (component Height p)
+toGLVertex p = let Vector x y = realToFrac <$> 2 * p <&> (/) <*> boardDims
+               in on Vertex2 (subtract 1) x y
 
 -- | Things which can be drawn
 class Drawable d where

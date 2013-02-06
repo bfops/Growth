@@ -77,8 +77,9 @@ mousePos :: Stream Id Event (Maybe Position)
 mousePos = arr fromMoveEvent >>> map (arr convertPos) >>> latch Nothing
     where
         convertPos :: OGL.Position -> Maybe Position
-        convertPos (OGL.Position x y) = mcond (0 <= x && x < 800 && 0 <= y && y < 800)
-                                      $ Vector (toInteger x `div` 25) (toInteger (800-y) `div` 25)
+        convertPos (OGL.Position x y) = mcond (0 <= x && x < fst windowDims && 0 <= y && y < snd windowDims)
+                                      $ Vector x (snd windowDims - y) <&> (*) <*> boardDims
+                                      <&> div <*> uncurry Vector windowDims
 
 mainLoop :: Stream IO () () -> IO (Stream IO () ())
 mainLoop s = (snd <$> s $< ()) <* io (sleep 0.1)
