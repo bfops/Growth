@@ -3,6 +3,7 @@
            #-}
 -- | Basic game object type, and associated functions
 module Game.Object ( Object (..)
+                   , Board
                    , Seeds
                    , Update
                    , object
@@ -15,6 +16,7 @@ import Impure
 
 import Control.Stream
 import Data.Tuple
+import Storage.Array
 import Storage.Cycle
 import Storage.Id
 import Storage.List hiding (cycle)
@@ -24,6 +26,7 @@ import Storage.Pair
 import Text.Show
 
 import Game.Vector
+import Physics.Types
 
 pairs :: Applicative f => f a -> f (Pair a)
 pairs l = Pair <$> l <*> l
@@ -42,6 +45,7 @@ data Object = Fire
 type Seeds = Vector (Pair (Maybe Object))
 type Update = Stream Id Seeds Object
 type Behaviour = Stream (Either Object) Seeds ()
+type Board = Array Position Object
 
 -- | What Object is in which neighbour?
 left, right, down, up :: Seeds -> Maybe Object

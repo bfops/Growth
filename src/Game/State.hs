@@ -4,7 +4,6 @@
            , TupleSections
            #-}
 module Game.State ( GameState (..)
-                  , Board
                   , tiles'
                   , game
                   ) where 
@@ -37,7 +36,6 @@ infix 3 <%%>
 (<%%>) fg h = (<$> h) <$$> fg
 
 type Creation = (Object, Position)
-type Board = Array Position Object
 type GameUpdate = Either () Creation
 
 newtype GameState = GameState { tiles :: Board }
@@ -46,7 +44,7 @@ $(memberTransformers ''GameState)
 
 -- | Advance the GameState
 game :: Stream Id (Maybe Input) GameState
-game = bind updates >>> updater update (tiles initState, initGame) >>> arr (GameState . fst)
+game = bind updates >>> updater update (initBoard, initGame) >>> arr (GameState . fst)
 
 updates :: Stream Id Input (Maybe GameUpdate)
 updates = arr reshape >>> map creations >>> arr sequence
@@ -77,7 +75,4 @@ update (Left _) (b, a0) = splitA $ zipAWith (runId <$$> ($<)) a0 disseminate
                               in mcond (inRange (bounds b) p') $ b!p'
 
 initGame :: Array Position Update
-initGame = object <$> tiles initState
-
-initState :: GameState
-initState = GameState $ array (0, 31) initBoard
+initGame = object <$> initBoard
