@@ -81,4 +81,4 @@ mousePos = arr fromMoveEvent >>> map (arr convertPos) >>> latch Nothing
                                       $ Vector (toInteger x `div` 25) (toInteger (800-y) `div` 25)
 
 mainLoop :: Stream IO () () -> IO (Stream IO () ())
-mainLoop s = snd <$> s $< ()
+mainLoop s = (snd <$> s $< ()) <* io (sleep 0.1)
