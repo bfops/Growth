@@ -6,14 +6,16 @@ module Config ( viewDist
               , title
               , keymap
               , clickAction
+              , initBoard
               ) where
 
 import Prelewd
 
 import Storage.Map
 
+import Game.Input
 import Game.Object
-import Game.State
+import Game.Vector
 import Physics.Types
 import Wrappers.Events
 import Wrappers.GLFW (DisplayOptions (..), defaultDisplayOptions)
@@ -46,3 +48,6 @@ keymap = mapKeys CharKey $ fromList
 
 clickAction :: Position -> Input
 clickAction = Place
+
+initBoard :: [(Position, Object)]
+initBoard = [(p, Air) | p <- Vector <$> [0..31] <*> [0..31]]

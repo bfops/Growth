@@ -4,7 +4,7 @@
            , TupleSections
            #-}
 module Game.State ( GameState (..)
-                  , Input (..)
+                  , Board
                   , tiles'
                   , game
                   ) where 
@@ -20,11 +20,13 @@ import Storage.Id
 import Storage.List
 import Storage.Pair
 import Template.MemberTransformer
-import Text.Show
 
+import Game.Input
 import Game.Object
 import Game.Vector
 import Physics.Types
+
+import Config
 
 splitA :: Ix i => Array i (e, f) -> (Array i e, Array i f)
 splitA a = listArray (bounds a) *** listArray (bounds a) $ unzip $ elems a
@@ -33,12 +35,6 @@ infix 3 <%%>
 
 (<%%>) :: (Functor f, Functor g, Functor h) => f (g (a -> b)) -> h a -> f (g (h b))
 (<%%>) fg h = (<$> h) <$$> fg
-
--- | Input events understood by the game
-data Input = Select Object
-           | Place Position
-           | Step
-    deriving (Show, Eq)
 
 type Creation = (Object, Position)
 type Board = Array Position Object
@@ -50,7 +46,7 @@ $(memberTransformers ''GameState)
 
 -- | Advance the GameState
 game :: Stream Id (Maybe Input) GameState
-game = bind updates >>> updater update (initBoard, initGame) >>> arr (GameState . fst)
+game = bind updates >>> updater update (tiles initState, initGame) >>> arr (GameState . fst)
 
 updates :: Stream Id Input (Maybe GameUpdate)
 updates = arr reshape >>> map creations >>> arr sequence
@@ -81,7 +77,7 @@ update (Left _) (b, a0) = splitA $ zipAWith (runId <$$> ($<)) a0 disseminate
                               in mcond (inRange (bounds b) p') $ b!p'
 
 initGame :: Array Position Update
-initGame = object <$> initBoard
+initGame = object <$> tiles initState
 
-initBoard :: Board
-initBoard = listArray (0, 31) $ repeat Air
+initState :: GameState
+initState = GameState $ array (0, 31) initBoard

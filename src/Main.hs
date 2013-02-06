@@ -20,11 +20,12 @@ import Wrappers.Events
 import Wrappers.GLFW
 import qualified Wrappers.OpenGL as OGL
 
-import Config
-
+import Game.Input
 import Game.State
 import Game.Vector
 import Physics.Types
+
+import Config
 
 import Main.Graphics
 
