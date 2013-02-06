@@ -40,8 +40,8 @@ fromMoveEvent _ = Nothing
 inChunks :: (Functor m, Monad m, Foldable t) => Stream m a b -> Stream m (t a) b
 inChunks s0 = updateSeveral s0 >>> identify (latch $ error "First update empty")
     where
-        updateSeveral s = Stream $ \l -> updateSeveral <$$> foldrM iterate (Nothing, s) l
-        iterate x (_, Stream f) = map2 Just <$> f x
+        updateSeveral s = Stream $ \l -> updateSeveral <$$> foldlM iterate (Nothing, s) l
+        iterate (_, Stream f) x = map2 Just <$> f x
 
 -- | Entry point
 main :: SystemIO ()
@@ -65,21 +65,19 @@ holdInputs = arr Just >>> updater holdInput mempty
 convertEvents :: Stream IO Event (Maybe Input)
 convertEvents = lift $ convertEvent <$> mousePos <*> id
     where
-        convertEvent :: Position -> Event -> IO (Maybe Input)
+        convertEvent :: Maybe Position -> Event -> IO (Maybe Input)
         convertEvent _ CloseEvent = mzero
         convertEvent _ (ResizeEvent s) = resize s $> Nothing
         convertEvent _ (ButtonEvent (KeyButton key) Press) = return $ lookup key keymap
-        convertEvent mouse (ButtonEvent (MouseButton MouseButton0) Press) = return $ Just $ clickAction mouse
+        convertEvent mouse (ButtonEvent (MouseButton MouseButton0) Press) = return $ clickAction <$> mouse
         convertEvent _ _ = return Nothing
 
-mousePos :: Stream Id Event Position
-mousePos = arr fromMoveEvent
-         >>> map (arr convertPos)
-         -- GLFW should send a mouse event as the first event
-         >>> latch (error "No mouse pos")
+mousePos :: Stream Id Event (Maybe Position)
+mousePos = arr fromMoveEvent >>> map (arr convertPos) >>> latch Nothing
     where
-        convertPos :: OGL.Position -> Position
-        convertPos (OGL.Position x y) = Vector (toInteger x `div` 25) (toInteger (800-y) `div` 25)
+        convertPos :: OGL.Position -> Maybe Position
+        convertPos (OGL.Position x y) = mcond (0 <= x && x < 800 && 0 <= y && y < 800)
+                                      $ Vector (toInteger x `div` 25) (toInteger (800-y) `div` 25)
 
 mainLoop :: Stream IO () () -> IO (Stream IO () ())
 mainLoop s = snd <$> s $< ()
