@@ -36,9 +36,9 @@ The order in which a tile mixes with its neighbours is up, left, right, down.
 
 ## Updating
 
-Updating is done incrementally whenever the key (configurable) is pressed.
-Water spreads (but not upwards); grass, fire, and lava spread in any direction, provided they have fuel
-(i.e. anything with which they will mix to propogate themselves). Rock doesn't spread, and is just there to build designs.
+Updating is done incrementally whenever the update key (configurable) is held.
+I don't want to explain all the intricacies of _how_ the objects update.
+For that, look at the Object Behaviours at the bottom of Game.Object.
 
 # Documentation
 

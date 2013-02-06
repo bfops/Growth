@@ -67,6 +67,22 @@ solid = (`elem` lst)
     where
         lst = Just <$> [Grass, Rock, Dirt]
 
+count :: (Maybe Object -> Bool) -> Seeds -> Integer
+count p = foldr (flip $ foldr $ \x -> if' (p x) (+ 1)) 0
+
+object :: Object -> Update
+object initObj = blackBox updateObject ([initObj], behaviour initObj) >>> latch initObj
+    where
+        accum obj = (Just obj, ([obj], behaviour obj))
+        behaviour obj = sequence_ $ behaviours obj
+        updateObject seeds (hist, s) = case s $< seeds of
+                    Left obj -> if elem obj hist
+                                then accum $ resolveCycle $ reverse $ obj : takeWhile (/= obj) hist
+                                else case updateObject seeds (obj:hist, behaviour obj) of
+                                    (Nothing, _) -> accum obj
+                                    x -> x
+                    Right (_, s') -> (Nothing, (hist, s'))
+
 resolveCycle :: [Object] -> Object
 resolveCycle [obj] = obj
 resolveCycle c = lookup (cycle c) cycles <?> error ("No cycle resolution for " <> show c)
@@ -77,6 +93,15 @@ resolveCycle c = lookup (cycle c) cycles <?> error ("No cycle resolution for " <
             , (cycle [Water False False, Water False True, Air], Water False True)
             , (cycle [Water False True, Water False False, Air], Water False False)
             ] <> [(cycle [Water False h, Air], Water False h) | h <- [False, True]]
+
+flagBehaviour :: Object -> Stream Id Seeds Bool -> Behaviour
+flagBehaviour obj s = lift $ s >>> arr (\b -> iff b (Left obj) $ Right ())
+
+counter :: (Maybe Object -> Bool) -> Object -> Integer -> Stream (Either Object) Seeds ()
+counter p obj m = flagBehaviour obj $ arr Just >>> updater ((+) . count p) 0 >>> arr (>= m)
+
+wait :: (Seeds -> Bool) -> Object -> Behaviour
+wait p obj = flagBehaviour obj $ arr p
 
 mix :: Maybe Object -> Object -> Behaviour
 mix obj result = wait (any $ any (== obj)) result
@@ -94,31 +119,6 @@ hydrophilic = sequence_ [wait (water . up) $ Water False False, wait flow $ Wate
         sideWater _ = False
 
         flow = sideWater . left <&> (||) <*> sideWater . right
-
-count :: (Maybe Object -> Bool) -> Seeds -> Integer
-count p = foldr (flip $ foldr $ \x -> if' (p x) (+ 1)) 0
-
-object :: Object -> Update
-object initObj = blackBox updateObject ([initObj], behaviour initObj) >>> latch initObj
-    where
-        accum obj = (Just obj, ([obj], behaviour obj))
-        behaviour obj = sequence_ $ behaviours obj
-        updateObject seeds (hist, s) = case s $< seeds of
-                    Left obj -> if elem obj hist
-                                then accum $ resolveCycle $ reverse $ obj : takeWhile (/= obj) hist
-                                else case updateObject seeds (obj:hist, behaviour obj) of
-                                    (Nothing, _) -> accum obj
-                                    x -> x
-                    Right (_, s') -> (Nothing, (hist, s'))
-
-flagBehaviour :: Object -> Stream Id Seeds Bool -> Behaviour
-flagBehaviour obj s = lift $ s >>> arr (\b -> iff b (Left obj) $ Right ())
-
-counter :: (Maybe Object -> Bool) -> Object -> Integer -> Stream (Either Object) Seeds ()
-counter p obj m = flagBehaviour obj $ arr Just >>> updater ((+) . count p) 0 >>> arr (>= m)
-
-wait :: (Seeds -> Bool) -> Object -> Behaviour
-wait p obj = flagBehaviour obj $ arr p
 
 behaviours :: Object -> [Behaviour]
 
