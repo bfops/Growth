@@ -25,11 +25,14 @@ import Text.Show
 
 import Game.Vector
 
+pairs :: Applicative f => f a -> f (Pair a)
+pairs l = Pair <$> l <*> l
+
 -- | Ordering is arbitrary, but deterministic
 data Object = Fire
             | Lava Bool
             | Grass
-            | Water Bool
+            | Water { source :: Bool, side :: Bool }
             | Air
             | Rock
             | Dirt
@@ -48,7 +51,7 @@ left, right, down, up :: Seeds -> Maybe Object
 
 water, lava, dirt, transparent, solid :: Maybe Object -> Bool
 
-water (Just (Water _)) = True
+water (Just (Water {})) = True
 water _ = False
 
 dirt = (== Just Dirt)
@@ -58,7 +61,7 @@ lava _ = False
 
 transparent = (`elem` lst)
     where
-        lst = Just <$> [Water False, Water True, Fire, Air]
+        lst = Just <$> (pair Water <$> pairs [False, True]) <> [Fire, Air]
 
 solid = (`elem` lst)
     where
@@ -71,9 +74,9 @@ resolveCycle c = lookup (cycle c) cycles <?> error ("No cycle resolution for " <
         cycles = fromList $
             [ (cycle [Rock, Lava False], Rock)
             , (cycle [Lava False, Lava True], Lava True)
-            , (cycle [Water True, Air], Air)
-            , (cycle [Water False, Air], Air)
-            ]
+            , (cycle [Water False False, Water False True, Air], Water False True)
+            , (cycle [Water False True, Water False False, Air], Water False False)
+            ] <> [(cycle [Water False h, Air], Water False h) | h <- [False, True]]
 
 mix :: Maybe Object -> Object -> Behaviour
 mix obj result = wait (any $ any (== obj)) result
@@ -85,9 +88,11 @@ magmify, hydrophilic :: Behaviour
 
 magmify = mix (Just $ Lava True) $ Lava False
 
-hydrophilic = sequence_ [wait (water . up) $ Water False, wait flow $ Water True]
+hydrophilic = sequence_ [wait (water . up) $ Water False False, wait flow $ Water False True]
     where
-        sideWater = (== Just (Water True))
+        sideWater (Just (Water _ True)) = True
+        sideWater _ = False
+
         flow = sideWater . left <&> (||) <*> sideWater . right
 
 count :: (Maybe Object -> Bool) -> Seeds -> Integer
@@ -120,8 +125,8 @@ behaviours :: Object -> [Behaviour]
 behaviours Fire = [magmify, hydrophilic]
 behaviours Grass = [magmify, conduct Fire, mix (Just $ Lava False) Fire]
 
-behaviours (Water b) = let switch = wait (iff b transparent solid . down) $ Water $ not b
-                       in [magmify, mix (Just $ Lava False) Air, switch]
+behaviours (Water s h) = let switch = wait (iff h transparent solid . down) $ Water s $ not h
+                         in [magmify, switch] <> mcond (not s) (lift $ arr $ \_-> Left Air)
 
 behaviours (Lava b) = [wait volcano (Lava True), iff b despawn $ wait (any $ any cold) Rock]
     where
