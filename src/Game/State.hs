@@ -44,7 +44,7 @@ $(memberTransformers ''GameState)
 
 -- | Advance the GameState
 game :: Stream Id (Maybe Input) GameState
-game = bind updates >>> updater update (initBoard, initGame) >>> arr (GameState . fst)
+game = bind updates >>> updater (Id <$$> update) (Id (initBoard, initGame)) >>> arr (GameState . fst)
 
 updates :: Stream Id Input (Maybe GameUpdate)
 updates = arr reshape >>> map creations >>> arr sequence
@@ -57,7 +57,7 @@ updates = arr reshape >>> map creations >>> arr sequence
 creations :: Stream Id (Either Object Position) (Maybe Creation)
 creations = liftA2 (,) <$> (buffer <<< lefts) <*> rights
     where
-        buffer = updater (\x _-> Just x) Nothing
+        buffer = updater (\x _-> Id $ Just x) $ Id Nothing
 
 update :: GameUpdate -> (Board, Array Position Update) -> (Board, Array Position Update)
 

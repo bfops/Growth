@@ -7,7 +7,6 @@ module Main (main) where
 
 import Prelewd
 
-import Impure
 import IO
 
 import Control.Stream
@@ -37,27 +36,20 @@ fromMoveEvent :: Event -> Maybe (OGL.Position)
 fromMoveEvent (MouseMoveEvent p) = Just p
 fromMoveEvent _ = Nothing
 
--- | Coerce a Stream to take chunks of inputs.
-inChunks :: (Functor m, Monad m, Foldable t) => Stream m a b -> Stream m (t a) b
-inChunks s0 = updateSeveral s0 >>> identify (latch $ error "First update empty")
-    where
-        updateSeveral s = Stream $ \l -> updateSeveral <$$> foldlM iterate (Nothing, s) l
-        iterate (_, Stream f) x = map2 Just <$> f x
-
 -- | Entry point
 main :: SystemIO ()
 main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
         initOpenGL
         initEvents
         loop mainLoop $ events
-                        >>> identify (id &&& inChunks holdInputs >>> arr resendHeld)
-                        >>> inChunks (convertEvents >>> identify game)
+                        >>> identify (id &&& several holdInputs >>> arr resendHeld)
+                        >>> several (convertEvents >>> identify game)
                         >>> lift (arr updateGraphics)
     where
         resendHeld (es, pushed) = es <> (toList pushed <&> (\b -> ButtonEvent b Press))
 
 holdInputs :: Stream Id Event (Set Button)
-holdInputs = arr Just >>> updater holdInput mempty
+holdInputs = arr Just >>> updater (Id <$$> holdInput) mempty
     where
         holdInput (ButtonEvent b Release) pushed = difference pushed $ set [b]
         holdInput (ButtonEvent b Press) pushed = pushed <> set [b]

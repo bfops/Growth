@@ -102,7 +102,7 @@ flagBehaviour :: Object -> Stream Id Seeds Bool -> Behaviour
 flagBehaviour obj s = lift $ s >>> arr (\b -> iff b (Left obj) $ Right ())
 
 counter :: (Maybe Object -> Bool) -> Object -> Integer -> Stream (Either Object) Seeds ()
-counter p obj m = flagBehaviour obj $ arr Just >>> updater ((+) . count p) 0 >>> arr (>= m)
+counter p obj m = flagBehaviour obj $ arr Just >>> updater (Id <$$> (+) . count p) 0 >>> arr (>= m)
 
 wait :: (Seeds -> Bool) -> Object -> Behaviour
 wait p obj = flagBehaviour obj $ arr p
