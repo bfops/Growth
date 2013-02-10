@@ -1,3 +1,0 @@
-You should have OpenGL and GLFW installed for these to run, and quite possibly a bunch of other stuff.
-I've only tested these on my machines where everything's set up properly.
-The builds are run with the default settings (e.g. keybindings) referenced in the root README.
