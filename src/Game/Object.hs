@@ -93,6 +93,7 @@ resolveCycle c = lookup (cycle c) cycles <?> error ("No cycle resolution for " <
     where
         cycles = fromList $
             [ (cycle [Rock, Lava False], Rock)
+            , (cycle [Rock, Lava True], Rock)
             , (cycle [Lava False, Lava True], Lava True)
             , (cycle [Water False False, Water False True, Air], Water False True)
             , (cycle [Water False True, Water False False, Air], Water False False)
@@ -132,7 +133,8 @@ behaviours Grass = [magmify, conduct Fire, mix (Just $ Lava False) Fire]
 behaviours (Water s h) = let switch = wait (iff h transparent solid . down) $ Water s $ not h
                          in [magmify, switch] <> mcond (not s) (lift $ arr $ \_-> Left Air)
 
-behaviours (Lava b) = [wait volcano (Lava True), iff b despawn $ wait (any $ any cold) Rock]
+behaviours (Lava b) = [wait volcano (Lava True), wait (\s -> count cold s >= iff b 2 1) Rock]
+                    <> mapMaybe id [mcond b despawn]
     where
         volcano (Vector (Pair (Just (Lava _)) (Just (Lava _))) (Pair (Just (Lava _)) (Just Rock))) = True
         volcano _ = False
@@ -149,11 +151,7 @@ behaviours Rock =
         , magmify
         ]
     where
-        volcano = wait ((Just (Lava True) ==) . down <&> (&&) <*> molten . left <&> (&&) <*> molten . right) $ Lava True
-
-        molten (Just Rock) = True
-        molten (Just (Lava _)) = True
-        molten _ = False
+        volcano = wait ((Just (Lava True) ==) . down) $ Lava True
 
 behaviours Dirt = [conduct $ Lava False, magmify]
 
