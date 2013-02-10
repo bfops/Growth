@@ -43,10 +43,13 @@ main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
         initEvents
         loop mainLoop $ events
                         >>> identify (id &&& several holdInputs >>> arr resendHeld)
-                        >>> several (convertEvents >>> identify game)
-                        >>> lift (arr updateGraphics)
+                        >>> several (convertEvents >>> map (identify game))
+                        >>> lift (arr $ uncurry updateGraphics)
     where
         resendHeld (es, pushed) = es <> (toList pushed <&> (\b -> ButtonEvent b Press))
+
+mainLoop :: Stream IO () () -> IO (Stream IO () ())
+mainLoop s = (snd <$> s $< ()) <* io (sleep 0.1)
 
 holdInputs :: Stream Id Event (Set Button)
 holdInputs = arr Just >>> updater (Id <$$> holdInput) mempty
@@ -55,8 +58,9 @@ holdInputs = arr Just >>> updater (Id <$$> holdInput) mempty
         holdInput (ButtonEvent b Press) pushed = pushed <> set [b]
         holdInput _ pushed = pushed
 
-convertEvents :: Stream IO Event (Maybe Input)
-convertEvents = lift $ convertEvent <$> mousePos <*> id
+convertEvents :: Stream IO Event (Position, Maybe Input)
+convertEvents = identify origin &&& id
+              >>> identify (arr fst) &&& lift (convertEvent <$> mousePos <*> arr snd)
     where
         convertEvent :: Maybe Position -> Event -> IO (Maybe Input)
         convertEvent _ CloseEvent = mzero
@@ -65,13 +69,19 @@ convertEvents = lift $ convertEvent <$> mousePos <*> id
         convertEvent mouse (ButtonEvent (MouseButton MouseButton0) Press) = return $ clickAction <$> mouse
         convertEvent _ _ = return Nothing
 
-mousePos :: Stream Id Event (Maybe Position)
-mousePos = arr fromMoveEvent >>> map (arr convertPos) >>> latch Nothing
+origin :: Stream Id Event Position
+origin = arr cameraMoves >>> updater (Id <$$> (+)) 0
+    where
+        cameraMoves (ButtonEvent (KeyButton KeyLeft) Press) = Just $ Vector (-1) 0
+        cameraMoves (ButtonEvent (KeyButton KeyRight) Press) = Just $ Vector 1 0
+        cameraMoves (ButtonEvent (KeyButton KeyDown) Press) = Just $ Vector 0 (-1)
+        cameraMoves (ButtonEvent (KeyButton KeyUp) Press) = Just $ Vector 0 1
+        cameraMoves _ = Nothing
+
+mousePos :: Stream Id (Position, Event) (Maybe Position)
+mousePos = map (arr fromMoveEvent >>> map (arr convertPos) >>> latch Nothing) >>> arr (uncurry $ map . (+))
     where
         convertPos :: OGL.Position -> Maybe Position
-        convertPos (OGL.Position x y) = mcond (0 <= x && x < fst windowDims && 0 <= y && y < snd windowDims)
-                                      $ Vector x (snd windowDims - y) <&> (*) <*> boardDims
-                                      <&> div <*> uncurry Vector windowDims
-
-mainLoop :: Stream IO () () -> IO (Stream IO () ())
-mainLoop s = (snd <$> s $< ()) <* io (sleep 0.1)
+        convertPos (OGL.Position x y) = mcond (0 <= x && x < fst windowSize && 0 <= y && y < snd windowSize)
+                                      $ Vector x (snd windowSize - y) <&> (*) <*> screenDims
+                                      <&> div <*> uncurry Vector windowSize

@@ -23,7 +23,7 @@ import Config
 
 -- | Convert the game's vector to an OpenGL coordinate
 toGLVertex :: Position -> Vertex2 GLdouble
-toGLVertex p = let Vector x y = realToFrac <$> 2 * p <&> (/) <*> boardDims
+toGLVertex p = let Vector x y = realToFrac <$> 2 * p <&> (/) <*> screenDims
                in on Vertex2 (subtract 1) x y
 
 -- | Things which can be drawn

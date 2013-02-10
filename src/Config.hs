@@ -2,8 +2,9 @@
            #-}
 -- | Settings are stored in this module
 module Config ( viewDist
+              , windowSize
               , boardDims
-              , windowDims
+              , screenDims
               , displayOpts
               , title
               , keymap
@@ -29,17 +30,22 @@ import Wrappers.GLFW (DisplayOptions (..), defaultDisplayOptions)
 viewDist :: Int
 viewDist = 3
 
-windowDims :: Num a => (a, a)
-windowDims = (800, 800)
+windowSize :: Num a => (a, a)
+windowSize = (800, 800)
 
+-- | Dimensions of the whole board
 boardDims :: Num a => Vector a
-boardDims = 32
+boardDims = Vector 64 32
+
+-- | Dimensions of the segment of board to show on the screen
+screenDims :: Num a => Vector a
+screenDims = 32
 
 -- | GLFW display options
 displayOpts :: DisplayOptions
 displayOpts = defaultDisplayOptions
-    { displayOptions_width = fst windowDims
-    , displayOptions_height = snd windowDims
+    { displayOptions_width = fst windowSize
+    , displayOptions_height = snd windowSize
     , displayOptions_windowIsResizable = False
     }
 

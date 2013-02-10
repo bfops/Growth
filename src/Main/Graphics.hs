@@ -11,9 +11,14 @@ import IO
 
 import Game.Render
 import Game.State
+import Game.Vector
+import qualified Physics.Types as Game
+
 import Wrappers.Events
 import Wrappers.GLFW
 import Wrappers.OpenGL hiding (position)
+
+import Config
 
 -- | Initialize the OpenGL context
 initOpenGL :: IO ()
@@ -24,20 +29,24 @@ initOpenGL = io $ do
         hint PerspectiveCorrection $= Nicest
 
 -- | Draw one frame of the game state
-drawFrame :: GameState -- ^ State to draw
+drawFrame :: Game.Position
+          -> GameState  -- ^ State to draw
           -> IO ()
-drawFrame g = do
+drawFrame origin g = do
         -- Clear the screen
         io $ clear [ ColorBuffer, DepthBuffer ]
         -- Reset the view
         io loadIdentity
-        --io $ lookAt (Vertex3 0 0 3) (Vertex3 0 0 0) (Vector3 0 1 0)
         io $ ortho (-2.35) 2.35 (-2.35) 2.35 0.1 10
+        io $ translate $ vector3 $ (-2) * (realToFrac <$> origin) / screenDims
         
         draw g
 
         -- Write it all to the buffer
         io flush
+    where
+        vector3 :: Vector GLdouble -> Vector3 GLdouble
+        vector3 (Vector x y) = Vector3 x y 0
 
 -- | Resize OpenGL view
 resize :: Size -> IO ()
@@ -54,5 +63,5 @@ resize s@(Size w h) = io $ do
         (//) = (/) `on` realToFrac
 
 -- | One iteration of graphics
-updateGraphics :: GameState -> IO ()
-updateGraphics g = drawFrame g >> io swapBuffers
+updateGraphics :: Game.Position -> GameState -> IO ()
+updateGraphics origin g = drawFrame origin g >> io swapBuffers
