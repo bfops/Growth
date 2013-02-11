@@ -59,7 +59,7 @@ keymap = mapKeys CharKey $ fromList
        [ (' ', Step)
        , ('F', Select Fire)
        , ('A', Select Air)
-       , ('W', Select $ Water Nothing)
+       , ('I', Select Ice)
        , ('R', Select Rock)
        ]
 

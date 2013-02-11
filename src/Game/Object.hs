@@ -36,6 +36,7 @@ data Object = Fire
             | Air
             | Rock
             | Dirt
+            | Ice
     deriving (Show, Eq, Ord)
 
 -- | Spawns from a set of neighbours
@@ -62,7 +63,7 @@ lava _ = False
 
 solid = (`elem` lst)
     where
-        lst = Just <$> [Grass, Rock, Dirt]
+        lst = Just <$> [Grass, Rock, Dirt, Ice]
 
 count :: (Maybe Object -> Bool) -> Seeds -> Integer
 count p = foldr (flip $ foldr $ \x -> if' (p x) (+ 1)) 0
@@ -88,6 +89,7 @@ resolveCycle c = lookup (cycle c) cycles <?> error ("No cycle resolution for " <
             [ (cycle [Rock, Lava False], Rock)
             , (cycle [Rock, Lava True], Rock)
             , (cycle [Lava False, Lava True], Lava True)
+            , (cycle [Ice, Water Nothing], Water Nothing)
             ]
 
 flagBehaviour :: Object -> Stream Id Seeds Bool -> Behaviour
@@ -130,7 +132,8 @@ behaviours :: Object -> [Behaviour]
 behaviours Fire = [magmify, hydrophilic]
 behaviours Grass = [magmify, conduct Fire, mix (Just $ Lava False) Fire]
 
-behaviours (Water s) = [magmify] <> mapMaybe id [s <&> \_-> flow]
+behaviours (Water s) = [magmify, counter (== (Just Ice)) Ice 16]
+                     <> mapMaybe id [s <&> \_-> flow]
     where
         flow = lift $ arr $ either (diff $ Water s) (\_-> Left Air) . (hydrophilic $<)
 
@@ -143,6 +146,7 @@ behaviours (Lava b) = [wait volcano (Lava True), wait (\s -> count cold s >= iff
         volcano _ = False
 
         cold (Just Air) = True
+        cold (Just Ice) = True
         cold obj = water obj
 
         despawn = wait (all $ all $ lava <&> (||) <*> (== Just Rock)) $ Lava False
@@ -160,3 +164,8 @@ behaviours Rock =
 behaviours Dirt = [conduct $ Lava False, magmify]
 
 behaviours Air = [magmify, hydrophilic, counter dirt Grass 32]
+
+behaviours Ice = [magmify, wait (any $ any warm) $ Water Nothing]
+    where
+        warm (Just Fire) = True
+        warm obj = lava obj
