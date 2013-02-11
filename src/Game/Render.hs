@@ -38,7 +38,7 @@ instance Drawable (Position, Object) where
     draw (p, o) = drawQuad (objColor o) p
         where
             objColor Fire = orange
-            objColor (Water s h) = Color4 0 (iff h 0.25 0) (iff s 0.75 1) 1
+            objColor (Water s) = s <&> (\(l, r)-> Color4 0 0.25 (iff (l || r) 0.75 1) 1) <?> blue
             objColor Grass = green
             objColor Rock = grey
             objColor (Lava False) = red

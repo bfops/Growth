@@ -28,14 +28,11 @@ import Text.Show
 import Game.Vector
 import Physics.Types
 
-pairs :: Applicative f => f a -> f (Pair a)
-pairs l = Pair <$> l <*> l
-
 -- | Ordering is arbitrary, but deterministic
 data Object = Fire
             | Lava Bool
             | Grass
-            | Water { source :: Bool, side :: Bool }
+            | Water (Maybe (Bool, Bool))
             | Air
             | Rock
             | Dirt
@@ -53,7 +50,7 @@ left, right, down, up :: Seeds -> Maybe Object
     where
         getObj dim f = f . pair (,) . component dim
 
-water, lava, dirt, transparent, solid :: Maybe Object -> Bool
+water, lava, dirt, solid :: Maybe Object -> Bool
 
 water (Just (Water {})) = True
 water _ = False
@@ -62,10 +59,6 @@ dirt = (== Just Dirt)
 
 lava (Just (Lava _)) = True
 lava _ = False
-
-transparent = (`elem` lst)
-    where
-        lst = Just <$> (pair Water <$> pairs [False, True]) <> [Fire, Air]
 
 solid = (`elem` lst)
     where
@@ -95,9 +88,7 @@ resolveCycle c = lookup (cycle c) cycles <?> error ("No cycle resolution for " <
             [ (cycle [Rock, Lava False], Rock)
             , (cycle [Rock, Lava True], Rock)
             , (cycle [Lava False, Lava True], Lava True)
-            , (cycle [Water False False, Water False True, Air], Water False True)
-            , (cycle [Water False True, Water False False, Air], Water False False)
-            ] <> [(cycle [Water False h, Air], Water False h) | h <- [False, True]]
+            ]
 
 flagBehaviour :: Object -> Stream Id Seeds Bool -> Behaviour
 flagBehaviour obj s = lift $ s >>> arr (\b -> iff b (Left obj) $ Right ())
@@ -118,20 +109,32 @@ magmify, hydrophilic :: Behaviour
 
 magmify = mix (Just $ Lava True) $ Lava False
 
-hydrophilic = sequence_ [wait (water . up) $ Water False False, wait flow $ Water False True]
+hydrophilic = lift $ arr $ \seeds -> constructWater (down seeds) <$> resultFlow seeds <?> Right ()
     where
-        sideWater (Just (Water _ True)) = True
-        sideWater _ = False
+        constructWater ground flow = Left $ Water $ Just $ iff (solid ground) flow (False, False)
 
-        flow = sideWater . left <&> (||) <*> sideWater . right
+        resultFlow seeds = if water $ up seeds
+                           then Just (True, True)
+                           else let l = flowsRight $ left seeds
+                                    r = flowsLeft $ right seeds
+                                in mcond (l || r) (not l, not r)
+
+        flowsLeft (Just (Water s)) = fst <$> s <?> True
+        flowsLeft _ = False
+
+        flowsRight (Just (Water s)) = snd <$> s <?> True
+        flowsRight _ = False
 
 behaviours :: Object -> [Behaviour]
 
 behaviours Fire = [magmify, hydrophilic]
 behaviours Grass = [magmify, conduct Fire, mix (Just $ Lava False) Fire]
 
-behaviours (Water s h) = let switch = wait (iff h transparent solid . down) $ Water s $ not h
-                         in [magmify, switch] <> mcond (not s) (lift $ arr $ \_-> Left Air)
+behaviours (Water s) = [magmify] <> mapMaybe id [s <&> \_-> flow]
+    where
+        flow = lift $ arr $ either (diff $ Water s) (\_-> Left Air) . (hydrophilic $<)
+
+        diff o1 o2 = iff (o1 == o2) (Right ()) (Left o2)
 
 behaviours (Lava b) = [wait volcano (Lava True), wait (\s -> count cold s >= iff b 2 1) Rock]
                     <> mapMaybe id [mcond b despawn]
@@ -139,7 +142,8 @@ behaviours (Lava b) = [wait volcano (Lava True), wait (\s -> count cold s >= iff
         volcano (Vector (Pair (Just (Lava _)) (Just (Lava _))) (Pair (Just (Lava _)) (Just Rock))) = True
         volcano _ = False
 
-        cold obj = obj == Just Air || water obj
+        cold (Just Air) = True
+        cold obj = water obj
 
         despawn = wait (all $ all $ lava <&> (||) <*> (== Just Rock)) $ Lava False
 
