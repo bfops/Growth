@@ -7,6 +7,8 @@ module Main (main) where
 
 import Prelewd
 
+import Impure
+
 import IO
 
 import Control.Stream
@@ -79,9 +81,11 @@ origin = arr cameraMoves >>> updater (Id <$$> (+)) 0
         cameraMoves _ = Nothing
 
 mousePos :: Stream Id (Position, Event) (Maybe Position)
-mousePos = map (arr fromMoveEvent >>> map (arr convertPos) >>> latch Nothing) >>> arr (uncurry $ map . (+))
+mousePos = map mouseWindowPos >>> arr convertPos
     where
-        convertPos :: OGL.Position -> Maybe Position
-        convertPos (OGL.Position x y) = mcond (0 <= x && x < fst windowSize && 0 <= y && y < snd windowSize)
-                                      $ Vector x (snd windowSize - y) <&> (*) <*> screenDims
-                                      <&> div <*> uncurry Vector windowSize
+        mouseWindowPos = arr fromMoveEvent >>> latch (error "No initial mouse event")
+
+        convertPos :: (Position, OGL.Position) -> Maybe Position
+        convertPos (o, OGL.Position x y) = let
+                p = Vector x (snd windowSize - y) <&> (*) <*> screenDims <&> div <*> uncurry Vector windowSize
+            in cast (and . liftA2 (\bound i -> i >= 0 && i < bound) screenDims) $ p + o
