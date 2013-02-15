@@ -88,4 +88,4 @@ mousePos = map mouseWindowPos >>> arr convertPos
         convertPos :: (Position, OGL.Position) -> Maybe Position
         convertPos (o, OGL.Position x y) = let
                 p = Vector x (snd windowSize - y) <&> (*) <*> screenDims <&> div <*> uncurry Vector windowSize
-            in cast (and . liftA2 (\bound i -> i >= 0 && i < bound) screenDims) $ p + o
+            in cast (and . liftA2 (\bound i -> i >= 0 && i < bound) boardDims) $ p + o
