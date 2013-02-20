@@ -5,7 +5,7 @@ To build and run the game, you will need:
  * Haskell
  * cabal
  * llvm
- * Step (https://github.com/RobotGymnast/Step)
+ * Summit (https://github.com/RobotGymnast/Summit)
  * Game-Wrappers (https://github.com/RobotGymnast/Game-Wrappers)
 
 You can set up the build environment by running
@@ -65,6 +65,6 @@ Coding is a language. You are expressing ideas, so they should be as clear, conc
  * Functions ending with a single quote usually require a transformation function as one of their parameters
  * When indenting multi-lined bodies, align SOMETHING visually (e.g. operators)
    or just use a multiple of four spaces (at least 8)
- * Indent a `where` clause by 4 spaces
+ * Indent a `where` keyword by 4 spaces, and the declarations within it by 8
  * If a `where` clause has more than one line in it, the `where` keyword should be on a distinct line from any code
  * Do not have more than one embedded subscope (A `let` inside a `where` is acceptable, but to be used sparingly)
