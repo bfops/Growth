@@ -76,7 +76,7 @@ origin = arr cameraMoves >>> updater (barr (+)) 0
 mousePos :: Stream Id (Position, Event) (Maybe Position)
 mousePos = map mouseWindowPos >>> arr convertPos
     where
-        mouseWindowPos = arr fromMoveEvent >>> latch id (error "No initial mouse event")
+        mouseWindowPos = arr fromMoveEvent >>> latch (error "No initial mouse event")
 
         convertPos :: (Position, OGL.Position) -> Maybe Position
         convertPos (o, OGL.Position x y) = let

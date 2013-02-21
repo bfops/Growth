@@ -46,7 +46,7 @@ $(memberTransformers ''GameState)
 game :: Stream Id (Maybe Input) GameState
 game = bind updates
    >>> map (updater (barr update) (initBoard, initGame) >>> arr (GameState . fst))
-   >>> latch id (GameState initBoard)
+   >>> latch (GameState initBoard)
 
 updates :: Stream Id Input (Maybe GameUpdate)
 updates = arr reshape >>> map creations >>> arr sequence

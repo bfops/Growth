@@ -69,7 +69,7 @@ count :: (Maybe Object -> Bool) -> Seeds -> Integer
 count p = foldr (flip $ foldr $ \x -> if' (p x) (+ 1)) 0
 
 object :: Object -> Update
-object initObj = loop (barr updateObject) ([initObj], behaviour initObj) >>> latch id initObj
+object initObj = loop (barr updateObject) ([initObj], behaviour initObj) >>> latch initObj
     where
         accum obj = (Just obj, ([obj], behaviour obj))
         behaviour obj = sequence_ $ behaviours obj
