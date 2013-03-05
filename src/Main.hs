@@ -49,7 +49,7 @@ main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
 holdInputs :: Stream Id Event (Set Button)
 holdInputs = updater (barr holdInput) mempty
     where
-        holdInput (ButtonEvent b Release) pushed = difference pushed $ set [b]
+        holdInput (ButtonEvent b Release) pushed = pushed \\ set [b]
         holdInput (ButtonEvent b Press) pushed = pushed <> set [b]
         holdInput _ pushed = pushed
 
