@@ -5,8 +5,8 @@ To build and run the game, you will need:
  * Haskell
  * cabal
  * llvm
- * Summit (https://github.com/RobotGymnast/Summit)
- * Game-Wrappers (https://github.com/RobotGymnast/Game-Wrappers)
+ * [Summit](https://github.com/RobotGymnast/Summit)
+ * [Game-Wrappers](https://github.com/RobotGymnast/Game-Wrappers)
 
 You can set up the build environment by running
 
@@ -27,18 +27,13 @@ After a successful build, the game can be run from
 
     dist/build/Growth/Growth
 
-Keys are configurable in `src/Config.hs`
-
-## Mixing
-
-Objects mix with one another as shown in `Game/Object.hs`.
-The order in which a tile mixes with its neighbours is up, left, right, down.
+Keys are configurable in `src/Config.hs`.
 
 ## Updating
 
-Updating is done incrementally whenever the update key (configurable) is held.
+One "step" of updating occurs whenever the Update Step key (configurable) is held.
 I don't want to explain all the intricacies of _how_ the objects update.
-For that, look at the Object Behaviours at the bottom of Game.Object.
+For that, look at the Object Behaviours at the bottom of `Game.Object`.
 
 # Documentation
 
