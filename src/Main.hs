@@ -42,7 +42,7 @@ main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
         iterateM_ (map snd . ($< ())) $ events
                                     >>> identify (id &&& several holdInputs >>> arr resendHeld)
                                     >>> several (convertEvents >>> map (identify game))
-                                    >>> lift (barr updateGraphics >>> arr (\_-> io $ sleep 0.1))
+                                    >>> lift (barr updateGraphics)
     where
         resendHeld (es, pushed) = es <> (toList pushed <&> (\b -> ButtonEvent b Press))
 

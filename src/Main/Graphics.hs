@@ -37,7 +37,6 @@ drawFrame origin g = do
         io $ clear [ ColorBuffer, DepthBuffer ]
         -- Reset the view
         io loadIdentity
-        io $ ortho (-2.35) 2.35 (-2.35) 2.35 0.1 10
         io $ translate $ vector3 $ (-2) * (realToFrac <$> origin) / screenDims
         
         draw g
@@ -50,17 +49,14 @@ drawFrame origin g = do
 
 -- | Resize OpenGL view
 resize :: Size -> IO ()
-resize s@(Size w h) = io $ do
+resize s = io $ do
         viewport $= (Position 0 0, s)
     
         matrixMode $= Projection
         loadIdentity
-        perspective 45 (w // h) 0.1 64
     
         matrixMode $= Modelview 0
         loadIdentity
-    where
-        (//) = (/) `on` realToFrac
 
 -- | One iteration of graphics
 updateGraphics :: Game.Position -> GameState -> IO ()
