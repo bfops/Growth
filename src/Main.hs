@@ -34,14 +34,17 @@ fromMoveEvent :: Event -> Maybe (OGL.Position)
 fromMoveEvent (MouseMoveEvent p) = Just p
 fromMoveEvent _ = Nothing
 
+severalEvents :: (Functor m, Monad m, Foldable t) => Stream m a b -> Stream m (t a) b
+severalEvents s = several s >>> identify (latch $ error "No initial event!")
+
 -- | Entry point
 main :: SystemIO ()
 main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
         initOpenGL
         initEvents
         iterateM_ (map snd . ($< ())) $ events
-                                    >>> identify (id &&& several holdInputs >>> arr resendHeld)
-                                    >>> several (convertEvents >>> map (identify game))
+                                    >>> identify (id &&& severalEvents holdInputs >>> arr resendHeld)
+                                    >>> severalEvents (convertEvents >>> map (identify game))
                                     >>> lift (barr updateGraphics)
     where
         resendHeld (es, pushed) = es <> (toList pushed <&> (\b -> ButtonEvent b Press))
