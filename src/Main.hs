@@ -14,6 +14,7 @@ import IO
 import Control.Stream
 import Data.Tuple
 import Storage.Id
+import Storage.List
 import Storage.Map (lookup)
 import Storage.Set
 
@@ -35,7 +36,7 @@ fromMoveEvent (MouseMoveEvent p) = Just p
 fromMoveEvent _ = Nothing
 
 severalEvents :: (Functor m, Monad m, Foldable t) => Stream m a b -> Stream m (t a) b
-severalEvents s = several s >>> identify (latch $ error "No initial event!")
+severalEvents s = several s >>> identify (arr last >>> latch (error "No initial event!"))
 
 -- | Entry point
 main :: SystemIO ()
