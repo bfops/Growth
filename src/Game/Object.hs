@@ -17,11 +17,8 @@ import Impure
 import Control.Stream
 import Data.Tuple
 import Storage.Array
-import Storage.Cycle
 import Storage.Id
-import Storage.List hiding (cycle)
-import Storage.Map
-import Storage.Member
+import Storage.List
 import Storage.Pair
 import Text.Show
 
@@ -31,11 +28,13 @@ import Physics.Types
 any' :: Foldable t => t (a -> Bool) -> a -> Bool
 any' l obj = any ($ obj) l
 
+type Flow = Maybe (Bool, Bool)
+
 -- | Ordering is arbitrary, but deterministic
 data Object = Fire
             | Lava Bool
             | Grass
-            | Water (Maybe (Bool, Bool))
+            | Water Flow
             | Air
             | Rock
             | Dirt
@@ -45,8 +44,13 @@ data Object = Fire
 -- | Spawns from a set of neighbours
 type Seeds = Vector (Pair (Maybe Object))
 type Update = Stream Id Seeds Object
-type Behaviour = Stream (Either Object) Seeds ()
+type Behaviour = Stream Maybe Seeds ()
+type Transformation = Stream (Either Object) Seeds ()
 type Board = Array Position Object
+
+infix 1 =>>
+(=>>) :: Behaviour -> Object -> Transformation
+b =>> obj = Stream $ \seeds -> (=>> obj) <$$> (b $< seeds) <&> Right <?> Left obj
 
 -- | What Object is in which neighbour?
 left, right, down, up :: Seeds -> Maybe Object
@@ -54,7 +58,7 @@ left, right, down, up :: Seeds -> Maybe Object
     where
         getObj dim f = f . pair (,) . component dim
 
-water, rightWater, leftWater, lava, solid, cold :: Maybe Object -> Bool
+water, rightWater, leftWater, lava, solid :: Maybe Object -> Bool
 
 water (Just (Water {})) = True
 water _ = False
@@ -68,62 +72,44 @@ rightWater _ = False
 lava (Just (Lava _)) = True
 lava _ = False
 
-dirt, rock, ice, fire, air, grass :: Maybe Object -> Bool
-[dirt, rock, ice, fire, air, grass] = Just <$> [Dirt, Rock, Ice, Fire, Air, Grass] <&> (==)
+dirt, rock, ice, grass :: Maybe Object -> Bool
+[dirt, rock, ice, grass] = Just <$> [Dirt, Rock, Ice, Grass] <&> (==)
 
 solid = any' [grass, rock, ice, dirt]
-
-cold = any' [water, air, ice]
-
-count :: (Maybe Object -> Bool) -> Seeds -> Integer
-count p = foldr (flip $ foldr $ \x -> if' (p x) (+ 1)) 0
 
 object :: Object -> Update
 object initObj = loop (barr updateObject) ([initObj], behaviour initObj) >>> latch initObj
     where
         accum obj = (Just obj, ([obj], behaviour obj))
-        behaviour obj = sequence_ $ behaviours obj
-        updateObject seeds (hist, s) = case s $< seeds of
-                    Left obj -> if elem obj hist
-                                then accum $ resolveCycle $ reverse $ obj : takeWhile (/= obj) hist
-                                else case updateObject seeds (obj:hist, behaviour obj) of
-                                    (Nothing, _) -> accum obj
-                                    x -> x
-                    Right (_, s') -> (Nothing, (hist, s'))
+        behaviour obj = sequence_ $ transformations obj
+        updateObject seeds (hist, s) = either accum ((Nothing,) . (hist,) . snd) (s $< seeds)
 
-resolveCycle :: [Object] -> Object
-resolveCycle [obj] = obj
-resolveCycle c = lookup (cycle c) cycles <?> error ("No cycle resolution for " <> show c)
+wait :: Stream Id Seeds Bool -> Behaviour
+wait s = lift $ s >>> arr (\b -> mcond (not b) ())
+
+infixl 2 `except`
+-- | Create a Behaviour which, upon termination, will first check some other Behaviour for confirmation.
+-- Note that both Behaviours advance every time the resultant Behaviour advances.
+except :: Behaviour     -- ^ Terminating Behaviour
+       -> Behaviour     -- ^ Upon termination, check this Behaviour.
+                        -- If it also terminates, refute the termination of the original Behaviour.
+       -> Behaviour
+b `except` ex = Stream $ \seeds -> case (b $< seeds, ex $< seeds) of
+                            (Nothing, Just _) -> Nothing
+                            (b', ex') -> Just ((), snd <$> b' <?> b `except` snd <$> ex' <?> ex)
+
+count :: Integer -> (Maybe Object -> Bool) -> Behaviour
+count n p = wait $ updater (barr $ (+) . countPs) 0 >>> arr (>= n)
     where
-        cycles = fromList $
-            [ (cycle [Rock, Lava False], Rock)
-            , (cycle [Rock, Lava True], Rock)
-            , (cycle [Lava False, Lava True], Lava True)
-            , (cycle [Ice, Water Nothing], Water Nothing)
-            ]
+        countPs = foldr (flip $ foldr $ \x -> if' (p x) (+ 1)) 0
 
-flagBehaviour :: Object -> Stream Id Seeds Bool -> Behaviour
-flagBehaviour obj s = lift $ s >>> arr (\b -> iff b (Left obj) $ Right ())
+mix :: Object -> Behaviour
+mix = wait . arr . any . any . (==) . Just
 
-counter :: (Maybe Object -> Bool) -> Object -> Integer -> Stream (Either Object) Seeds ()
-counter p obj m = flagBehaviour obj $ updater (barr $ (+) . count p) 0 >>> arr (>= m)
-
-wait :: (Seeds -> Bool) -> Object -> Behaviour
-wait p obj = flagBehaviour obj $ arr p
-
-mix :: Maybe Object -> Object -> Behaviour
-mix obj result = wait (any $ any (== obj)) result
-
-conduct :: Object -> Behaviour
-conduct = mix =<< Just
-
-magmify, hydrophilic :: Behaviour
-
-magmify = mix (Just $ Lava True) $ Lava False
-
-hydrophilic = lift $ arr $ \seeds -> constructWater (down seeds) <$> resultFlow seeds <?> Right ()
+waterFlow :: Stream Id Seeds (Maybe Flow)
+waterFlow = arr $ \seeds -> considerGround (down seeds) <$> resultFlow seeds
     where
-        constructWater ground flow = Left $ Water $ Just $ iff (solid ground) flow (False, False)
+        considerGround ground flow = Just $ iff (solid ground) flow (False, False)
 
         resultFlow seeds = if water $ up seeds
                            then Just (True, True)
@@ -131,41 +117,64 @@ hydrophilic = lift $ arr $ \seeds -> constructWater (down seeds) <$> resultFlow 
                                     r = leftWater $ right seeds
                                 in mcond (l || r) (not l, not r)
 
-behaviours :: Object -> [Behaviour]
+-- | Incorporate flowing Water
+hydrophilic :: Behaviour
+hydrophilic = lift $ waterFlow >>> arr (\m -> (\_-> Nothing) <$> m <?> Just ())
 
-behaviours Fire = [magmify, hydrophilic]
-behaviours Grass = [magmify, conduct Fire, mix (Just $ Lava False) Fire]
+-- | Water will flow through these tiles
+waterThrough :: Transformation
+waterThrough = lift $ waterFlow >>> arr (\m -> Left . Water <$> m <?> Right ())
 
-behaviours (Water s) = [magmify, counter ice Ice 16]
-                     <> mapMaybe id [s <&> \_-> flow]
+magmify :: Transformation
+magmify = mix (Lava True) =>> Lava False
+
+heat :: Integer -> Behaviour
+heat 0 = error $ "`heat 0` causes instant change"
+heat n = wait
+       $ arr flatten
+     >>> several (updater (barr $ try $ (+) . deltaHeat) 0)
+     >>> arr (\l -> iff (n > 0) (>= n) (<= n) $ last l <?> 0)
     where
-        flow = lift $ arr $ either (diff $ Water s) (\_-> Left Air) . (hydrophilic $<)
+        flatten seeds = toList seeds >>= toList
+
+        deltaHeat Fire = 2
+        deltaHeat (Lava b) = iff b 12 8
+        deltaHeat Ice = -1
+        deltaHeat _ = 0
+
+lavaToRock :: Behaviour
+lavaToRock = sequence_ [hydrophilic, mix Air]
+
+transformations :: Object -> [Transformation]
+
+transformations Fire = [magmify, waterThrough]
+transformations Grass = [magmify, mix Fire =>> Fire, mix (Lava False) =>> Fire]
+
+transformations (Water s) = [magmify, heat (-16) =>> Ice]
+                         <> mapMaybe id [s <&> \_-> flow]
+    where
+        flow = lift $ arr $ either (diff $ Water s) (\_-> Left Air) . (waterThrough $<)
 
         diff o1 o2 = iff (o1 == o2) (Right ()) (Left o2)
 
-behaviours (Lava b) = [wait volcano (Lava True), wait (\s -> count cold s >= iff b 2 1) Rock]
-                    <> mapMaybe id [mcond b despawn]
+transformations (Lava b) = [wait (arr volcano) =>> Lava True, lavaToRock =>> Rock]
+                        <> mcond b despawn
     where
-        volcano (Vector (Pair (Just (Lava _)) (Just (Lava _))) (Pair (Just (Lava _)) (Just Rock))) = True
-        volcano _ = False
+        volcano seeds = all lava ([left, right, down] <&> ($ seeds)) && (rock (up seeds) || dirt (up seeds))
 
-        despawn = wait (all $ all $ lava <&> (||) <*> rock) $ Lava False
+        despawn = wait (arr $ all $ all $ lava <&> (||) <*> rock) =>> Lava False
 
-behaviours Rock =
-        [ counter water Dirt 32
-        , counter fire (Lava False) 16
+transformations Rock =
+        [ count 32 water `except` wait (arr $ any $ any lava) =>> Dirt
         , volcano
-        , conduct $ Lava False
+        , heat 8 `except` lavaToRock =>> Lava False
         , magmify
         ]
     where
-        volcano = wait ((Just (Lava True) ==) . down) $ Lava True
+        volcano = wait (arr $ (Just (Lava True) ==) . down) =>> Lava True
 
-behaviours Dirt = [conduct $ Lava False, magmify]
+transformations Dirt = [mix (Lava False) =>> Lava False, magmify]
 
-behaviours Air = [magmify, hydrophilic, counter dirt Grass 32]
+transformations Air = [magmify, waterThrough, count 32 dirt =>> Grass]
 
-behaviours Ice = [magmify, wait (any $ any warm) $ Water Nothing]
-    where
-        warm (Just Fire) = True
-        warm obj = lava obj
+transformations Ice = [magmify, heat 2 =>> Water Nothing]
