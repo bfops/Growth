@@ -32,7 +32,7 @@ viewDist :: Int
 viewDist = 3
 
 windowSize :: Num a => (a, a)
-windowSize = (800, 800)
+windowSize = (400, 400)
 
 -- | Dimensions of the whole board
 boardDims :: Num a => Vector a
@@ -74,6 +74,7 @@ initBoard :: Board
 initBoard = listArray (0, boardDims - 1) (repeat Air)
           // [(Vector 29 0, Fire), (Vector 15 29, Fire)]
           // [(Vector i 31, Snow) | i <- [13..17]]
+          // [(Vector (17 - i + j) (25 - i), Snow) | i <- [0..3], j <- [0 .. 2 * i]]
           // mapMaybe (\(b, p) -> mcond (b == X) (p, Rock))
                       (zip rocks [Vector x y | y <- reverse [0..31], x <- [0..31]])
     where
