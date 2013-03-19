@@ -18,7 +18,6 @@ import Control.Stream
 import Data.Tuple
 import Storage.Array
 import Storage.Id
-import Storage.List
 import Storage.Pair
 import Text.Show
 
@@ -98,10 +97,17 @@ b `except` ex = Stream $ \seeds -> case (b $< seeds, ex $< seeds) of
                             (Nothing, Just _) -> Nothing
                             (b', ex') -> Just ((), snd <$> b' <?> b `except` snd <$> ex' <?> ex)
 
-count :: Integer -> (Maybe Object -> Bool) -> Behaviour
-count n p = wait $ updater (barr $ (+) . countPs) 0 >>> arr (>= n)
+-- | Accumulate a count until a specified goal
+count :: Integer -> (Seeds -> Integer) -> Behaviour
+count 0 _ = error "count 0 causes instant change"
+count n c = wait
+          $ updater (barr $ newCount . c) 0
+        >>> arr (iff (n > 0) (>= n) (<= n))
     where
-        countPs = foldr (flip $ foldr $ \x -> if' (p x) (+ 1)) 0
+        newCount d i = try (iff (n > 0) max min) 0 $ d + i
+
+neighbour :: (Maybe Object -> Bool) -> Seeds -> Integer
+neighbour n = foldr (flip $ foldr $ \x -> if' (n x) (+ 1)) 0
 
 mix :: Object -> Behaviour
 mix = wait . arr . any . any . (==) . Just
@@ -129,14 +135,8 @@ magmify :: Transformation
 magmify = mix (Lava True) =>> Lava False
 
 heat :: Integer -> Behaviour
-heat 0 = error $ "`heat 0` causes instant change"
-heat n = wait
-       $ arr flatten
-     >>> several (updater (barr $ try $ (+) . deltaHeat) 0)
-     >>> arr (\l -> iff (n > 0) (>= n) (<= n) $ last l <?> 0)
+heat n = count n $ \s -> sum $ sum . map (\o -> deltaHeat <$> o <?> 0) <$> s
     where
-        flatten seeds = toList seeds >>= toList
-
         deltaHeat Fire = 2
         deltaHeat (Lava b) = iff b 12 8
         deltaHeat Ice = -1
@@ -166,7 +166,7 @@ transformations (Lava b) = [wait (arr volcano) =>> Lava True, lavaToRock =>> Roc
         despawn = wait (arr $ all $ all $ lava <&> (||) <*> rock) =>> Lava False
 
 transformations Rock =
-        [ count 32 water `except` wait (arr $ any $ any lava) =>> Dirt
+        [ count 32 (neighbour water) `except` wait (arr $ any $ any lava) =>> Dirt
         , volcano
         , heat 8 `except` lavaToRock =>> Lava False
         , magmify
@@ -176,6 +176,6 @@ transformations Rock =
 
 transformations Dirt = [mix (Lava False) =>> Lava False, magmify]
 
-transformations Air = [magmify, waterThrough, count 32 dirt =>> Grass]
+transformations Air = [magmify, waterThrough, count 32 (neighbour dirt) =>> Grass]
 
 transformations Ice = [magmify, heat 2 =>> Water Nothing]
