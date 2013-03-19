@@ -150,12 +150,13 @@ transformations :: Object -> [Transformation]
 transformations Fire = [magmify, waterThrough]
 transformations Grass = [magmify, mix Fire =>> Fire, mix (Lava False) =>> Fire]
 
-transformations (Water s) = [magmify, heat (-16) =>> Ice]
-                         <> mapMaybe id [s <&> \_-> flow]
+transformations (Water s) = [magmify, heat (-16) =>> Ice, lift flow]
     where
-        flow = lift $ arr $ either (diff $ Water s) (\_-> Left Air) . (waterThrough $<)
+        flow = if s == Nothing
+               then arr $ \_-> Right ()
+               else waterFlow <&> \m -> diff . Water <$> m <?> Left Air
 
-        diff o1 o2 = iff (o1 == o2) (Right ()) (Left o2)
+        diff obj = iff (obj == Water s) (Right ()) (Left obj)
 
 transformations (Lava b) = [wait (arr volcano) =>> Lava True, lavaToRock =>> Rock]
                         <> mcond b despawn
