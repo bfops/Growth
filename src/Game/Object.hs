@@ -38,6 +38,7 @@ data Object = Fire
             | Rock
             | Dirt
             | Ice
+            | Snow
     deriving (Show, Eq, Ord)
 
 -- | Spawns from a set of neighbours
@@ -71,10 +72,10 @@ rightWater _ = False
 lava (Just (Lava _)) = True
 lava _ = False
 
-dirt, rock, ice, grass :: Maybe Object -> Bool
-[dirt, rock, ice, grass] = Just <$> [Dirt, Rock, Ice, Grass] <&> (==)
+dirt, rock, ice, grass, snow :: Maybe Object -> Bool
+[dirt, rock, ice, grass, snow] = Just <$> [Dirt, Rock, Ice, Grass, Snow] <&> (==)
 
-solid = any' [grass, rock, ice, dirt]
+solid = any' [grass, rock, ice, dirt, snow]
 
 object :: Object -> Update
 object initObj = loop (barr updateObject) ([initObj], behaviour initObj) >>> latch initObj
@@ -145,12 +146,15 @@ heat n = count n $ \s -> sum $ sum . map (\o -> deltaHeat <$> o <?> 0) <$> s
 lavaToRock :: Behaviour
 lavaToRock = sequence_ [hydrophilic, mix Air]
 
+snowFall :: Transformation
+snowFall = wait (arr $ snow . up) =>> Snow
+
 transformations :: Object -> [Transformation]
 
 transformations Fire = [magmify, waterThrough]
 transformations Grass = [magmify, mix Fire =>> Fire, mix (Lava False) =>> Fire]
 
-transformations (Water s) = [magmify, heat (-16) =>> Ice, lift flow]
+transformations (Water s) = [magmify, heat (-16) =>> Ice, lift flow, snowFall]
     where
         flow = if s == Nothing
                then arr $ \_-> Right ()
@@ -176,6 +180,14 @@ transformations Rock =
 
 transformations Dirt = [mix (Lava False) =>> Lava False, magmify]
 
-transformations Air = [magmify, waterThrough, count 32 (neighbour dirt) =>> Grass]
+transformations Air = [magmify, waterThrough, count 32 (neighbour dirt) =>> Grass, snowFall]
 
 transformations Ice = [magmify, heat 2 =>> Water Nothing]
+
+transformations Snow =
+        [ heat 1 =>> Water Nothing
+        , wait (arr $ not . solid . down) =>> Air
+        , count 8 (arr snowToIce) =>> Ice
+        ]
+    where
+        snowToIce s = iff (all (all solid) s) (neighbour snow s) 0
