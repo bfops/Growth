@@ -187,7 +187,7 @@ transformations Ice = [magmify, heat 2 =>> Water Nothing]
 transformations Snow =
         [ heat 1 =>> Water Nothing
         , wait (arr $ not . solid . down) =>> Air
-        , count 8 (arr snowToIce) =>> Ice
+        , count 32 (arr snowToIce) =>> Ice
         ]
     where
         snowToIce s = iff (all (all solid) s) (neighbour snow s) 0
