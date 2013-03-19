@@ -4,7 +4,6 @@ To build and run the game, you will need:
 
  * Haskell
  * cabal
- * llvm
  * [Summit](https://github.com/RobotGymnast/Summit)
  * [Game-Wrappers](https://github.com/RobotGymnast/Game-Wrappers)
 
