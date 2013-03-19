@@ -52,7 +52,7 @@ displayOpts = defaultDisplayOptions
 
 -- | Title of the game window
 title :: Text
-title = "Game"
+title = "Growth"
 
 -- | What controls what?
 keymap :: Map Key Input
