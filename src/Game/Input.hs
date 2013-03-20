@@ -7,7 +7,7 @@ import Prelewd
 
 import Text.Show
 
-import Game.Object
+import Game.Object.Type
 import Physics.Types
 
 -- | Input events understood by the game

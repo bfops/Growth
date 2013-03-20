@@ -22,6 +22,7 @@ import Template.MemberTransformer
 
 import Game.Input
 import Game.Object
+import Game.Object.Type
 import Game.Vector
 import Physics.Types
 

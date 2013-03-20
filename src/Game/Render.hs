@@ -12,7 +12,7 @@ import IO
 import Data.Tuple
 import Storage.Array
 
-import Game.Object
+import Game.Object.Type
 import Game.State
 import Game.Vector
 import Physics.Types
