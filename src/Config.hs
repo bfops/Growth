@@ -34,7 +34,7 @@ viewDist :: Int
 viewDist = 3
 
 windowSize :: Num a => (a, a)
-windowSize = (1000, 1000)
+windowSize = (400, 400)
 
 -- | Dimensions of the whole board
 boardDims :: Num a => Vector a
