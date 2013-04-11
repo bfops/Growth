@@ -11,6 +11,7 @@ import Impure
 
 import IO
 
+import Control.Concurrent (threadDelay)
 import Control.Stream
 import Data.Tuple
 import Storage.Id
@@ -47,7 +48,7 @@ main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
                                     >>> identify (id &&& severalEvents holdInputs >>> arr resendHeld)
                                     >>> severalEvents (convertEvents >>> map (identify game))
                                     >>> lift (barr updateGraphics)
-                                    >>> lift (arr $ \_-> io $ sleep 0.1)
+                                    >>> lift (arr $ \_-> io $ threadDelay 100000)
     where
         resendHeld (es, pushed) = es <> (toList pushed <&> (\b -> ButtonEvent b Press))
 

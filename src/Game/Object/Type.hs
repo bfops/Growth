@@ -19,7 +19,6 @@ module Game.Object.Type ( Object (..)
                         , right
                         , up
                         , down
-                        , solid
                         ) where
 
 import Prelewd
@@ -29,9 +28,6 @@ import Storage.Pair
 import Text.Show
 
 import Game.Vector
-
-any' :: Foldable t => t (a -> Bool) -> a -> Bool
-any' l obj = any ($ obj) l
 
 type Flow = Maybe (Bool, Bool)
 
@@ -47,7 +43,7 @@ data Object = Fire
             | Snow
     deriving (Show, Eq, Ord)
 
--- | Spawns from a set of neighbours
+-- | A set of spawns from the neighbours
 type Seeds = Vector (Pair (Maybe Object))
 
 -- | What Object is in which neighbour?
@@ -56,7 +52,7 @@ left, right, down, up :: Seeds -> Maybe Object
     where
         getObj dim f = f . pair (,) . component dim
 
-water, rightWater, leftWater, lava, solid :: Maybe Object -> Bool
+water, rightWater, leftWater, lava :: Maybe Object -> Bool
 
 water (Just (Water {})) = True
 water _ = False
@@ -72,5 +68,3 @@ lava _ = False
 
 fire, air, dirt, rock, ice, grass, snow :: Maybe Object -> Bool
 [fire, air, dirt, rock, ice, grass, snow] = Just <$> [Fire, Air, Dirt, Rock, Ice, Grass, Snow] <&> (==)
-
-solid = any' [grass, rock, ice, dirt, snow]

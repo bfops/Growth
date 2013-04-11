@@ -12,6 +12,7 @@ import IO
 import Data.Tuple
 import Storage.Array
 
+import Game.Object
 import Game.Object.Type
 import Game.State
 import Game.Vector
@@ -34,8 +35,8 @@ class Drawable d where
 instance Drawable GameState where
     draw = sequence_ . elems . mapWithIx (curry draw) . tiles
 
-instance Drawable (Position, Object) where
-    draw (p, o) = drawQuad (objColor o) p
+instance Drawable (Position, WarmObject) where
+    draw (p, (o, h)) = drawQuad (objColor o) p
         where
             objColor Fire = orange
             objColor (Water s) = s <&> (\(l, r)-> Color4 0 0.25 (iff (l || r) 0.75 1) 1) <?> blue
@@ -43,10 +44,18 @@ instance Drawable (Position, Object) where
             objColor Rock = grey
             objColor (Lava False) = red
             objColor (Lava True) = Color4 0.6 0.1 0 1
-            objColor Air = cyan
+            objColor Air = tempShift cyan
             objColor Dirt = Color4 0.3 0.2 0 1
             objColor Ice = Color4 0.2 0.6 1 1
             objColor Snow = white
+            
+            tempShift :: Fractional a => Color4 a -> Color4 a
+            tempShift (Color4 r g b a) = Color4 (tempShift1 0 1 r) (tempShift1 0 0 g) (tempShift1 1 0 b) a
+
+            tempShift1 t1 t2 k = let bounded = (max (negate maxHeat) $ min maxHeat h)
+                                 in k + iff (h > 0) (t2 - k) (k - t1) * ((/) `on` realToFrac) bounded maxHeat
+
+            maxHeat = 32
 
 -- | `draw c o` draws `o` as a quadrilateral, based on its position and size.
 drawQuad :: Color4 GLdouble -> Position -> IO ()

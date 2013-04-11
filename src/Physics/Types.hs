@@ -7,6 +7,8 @@ module Physics.Types ( PhysicsValue
                      , Scalar
                      , Time
                      , Distance
+                     , Heat
+                     , HeatCapacity
                      , Size
                      , Position
                      ) where
@@ -28,6 +30,9 @@ type Scalar = PhysicsValue
 type Time = Nonnegative Milli
 -- | Measure of space
 type Distance = PhysicsValue
+-- | Measure of heat
+type Heat = Milli
+type HeatCapacity = Deci
 
 -- | Dimensions of an object
 type Size = Vector (Positive Distance)

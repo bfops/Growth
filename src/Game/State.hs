@@ -10,6 +10,9 @@ module Game.State ( GameState (..)
 
 import Prelewd hiding ((!))
 
+import Impure
+import Text.Show
+
 import Control.Stream
 import Control.Stream.Either
 import Data.Ix
@@ -22,6 +25,7 @@ import Template.MemberTransformer
 
 import Game.Input
 import Game.Object
+import Game.Object.Heat
 import Game.Object.Type
 import Game.Vector
 import Physics.Types
@@ -64,18 +68,26 @@ creations = liftA2 (,) <$> (buffer <<< lefts) <*> rights
 
 update :: GameUpdate -> (Board, Array Position Update) -> (Board, Array Position Update)
 
-update (Right (obj, p)) (b, a) = (b // [(p, obj)], a // [(p, object obj)])
+update (Right (obj, p)) (b, a) = (b // [(p, (obj, initHeat obj))], a // [(p, object obj)])
 
-update (Left _) (b, a0) = splitA $ zipAWith (runId <$$> ($<)) a0 disseminate
+update (Left _) (b, a0) = traceShow "--------------------------"
+                        $ traceShow (withTrace <$> showHeat boardDims)
+                        $ splitA $ zipAWith (runId <$$> ($<)) a0 disseminate
     where
+        showHeat (Vector mx my) = [ intercalate " " [ show $ snd $ b ! Vector x y
+                                                    | x <- [0..mx-1]
+                                                    ]
+                                  | y <- reverse [0..my-1]
+                                  ]
+
         -- Propogate each Spawn to its neighbours, so each Position will have one Object from each neighbour
-        disseminate :: Array Position Seeds
+        disseminate :: Array Position Neighbours
         disseminate = listArray (bounds b) $ neighbour <$> indices b <%> dimensions <%%> Pair False True
 
         -- Find a neighbour in a given direction, and return the Object they're spawning towards the base position
-        neighbour :: Position -> Dimension -> Bool -> Maybe Object
+        neighbour :: Position -> Dimension -> Bool -> Maybe WarmObject
         neighbour p dim pos = let p' = component' dim (iff pos (+) subtract 1) p
                               in mcond (inRange (bounds b) p') $ b!p'
 
 initGame :: Array Position Update
-initGame = object <$> initBoard
+initGame = object . fst <$> initBoard

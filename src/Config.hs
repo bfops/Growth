@@ -22,6 +22,7 @@ import Storage.Map
 
 import Game.Input
 import Game.Object
+import Game.Object.Heat
 import Game.Object.Type
 import Game.Vector
 import Physics.Types
@@ -33,15 +34,15 @@ viewDist :: Int
 viewDist = 3
 
 windowSize :: Num a => (a, a)
-windowSize = (400, 400)
+windowSize = (1000, 1000)
 
 -- | Dimensions of the whole board
 boardDims :: Num a => Vector a
-boardDims = Vector 64 32
+boardDims = 3
 
 -- | Dimensions of the segment of board to show on the screen
 screenDims :: Num a => Vector a
-screenDims = 32
+screenDims = 3
 
 -- | GLFW display options
 displayOpts :: DisplayOptions
@@ -68,48 +69,7 @@ keymap = mapKeys CharKey $ fromList
 clickAction :: Position -> Input
 clickAction = Place
 
-data FullOrEmpty = I | X
-    deriving (Eq)
-
 initBoard :: Board
-initBoard = listArray (0, boardDims - 1) (repeat Air)
-          // [(Vector 29 0, Fire), (Vector 15 29, Fire)]
-          // [(Vector i 31, Snow) | i <- [13..17]]
-          // [(Vector (17 - i + j) (25 - i), Snow) | i <- [0..3], j <- [0 .. 2 * i]]
-          // mapMaybe (\(b, p) -> mcond (b == X) (p, Rock))
-                      (zip rocks [Vector x y | y <- reverse [0..31], x <- [0..31]])
-    where
-        rocks =
-            [ I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, I, I, I, I, I, I, I, I, X, X, X, X, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, I, I, I, I, I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, I, I, I, I, X, X, X, I, I, I, I, I, I, X, X, X, X, X, X, X, I, I, I, I, I, I, I
-            , I, I, I, I, I, I, X, X, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, X, X, X, I, I, I, I
-            , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, X, X, I, I
-            , I, I, I, I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, X, I
-            , I, I, I, X, X, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, X, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, X, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, X, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            , I, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, I, X, X, I
-            , X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, I, X, I
-            , X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, I, X, I
-            , X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, I, X, I
-            , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-            ]
+initBoard = (id &&& initHeat)
+        <$> listArray (0, boardDims - 1) (repeat Air)
+         // [(0, Snow)]
