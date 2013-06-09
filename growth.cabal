@@ -14,7 +14,7 @@ Executable Growth
     GHC-Options:    -Wall -Werror -threaded -rtsopts=all -fno-warn-orphans
 
     Build-Depends: 
-                    Summit == 0.11,
+                    Summit == 0.13,
                     Game-Wrappers == 0.2,
                     QuickCheck >= 2,
                     base

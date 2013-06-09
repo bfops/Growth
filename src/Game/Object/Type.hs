@@ -22,7 +22,7 @@ module Game.Object.Type ( Object (..)
                         , solid
                         ) where
 
-import Prelewd
+import Prelewd hiding (left, right)
 
 import Data.Tuple
 import Storage.Pair

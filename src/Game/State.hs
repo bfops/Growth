@@ -11,7 +11,6 @@ module Game.State ( GameState (..)
 import Prelewd hiding ((!))
 
 import Control.Stream
-import Control.Stream.Either
 import Data.Ix
 import Data.Tuple
 import Storage.Array
@@ -22,7 +21,7 @@ import Template.MemberTransformer
 
 import Game.Input
 import Game.Object
-import Game.Object.Type
+import Game.Object.Type hiding (left, right)
 import Game.Vector
 import Physics.Types
 
@@ -58,7 +57,7 @@ updates = arr reshape >>> map creations >>> arr sequence
 
 -- | What to add into the game world
 creations :: Stream Id (Either Object Position) (Maybe Creation)
-creations = liftA2 (,) <$> (buffer <<< lefts) <*> rights
+creations = liftA2 (,) <$> (buffer <<< arr left) <*> arr right
     where
         buffer = updater (barr (<|>)) Nothing
 

@@ -35,8 +35,8 @@ fromMoveEvent :: Event -> Maybe (OGL.Position)
 fromMoveEvent (MouseMoveEvent p) = Just p
 fromMoveEvent _ = Nothing
 
-severalEvents :: (Functor m, Monad m, Foldable t) => Stream m a b -> Stream m (t a) b
-severalEvents s = several s >>> identify (arr last >>> latch (error "No initial event!"))
+severalEvents :: (Applicative m, Monad m) => Stream m a b -> Stream m [a] b
+severalEvents s = map s >>> identify (arr last >>> latch (error "No initial event!"))
 
 -- | Entry point
 main :: SystemIO ()

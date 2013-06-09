@@ -57,7 +57,7 @@ title = "Growth"
 
 -- | What controls what?
 keymap :: Map Key Input
-keymap = mapKeys CharKey $ fromList
+keymap = map2 CharKey $ fromList
        [ (' ', Step)
        , ('F', Select Fire)
        , ('A', Select Air)

@@ -3,7 +3,7 @@
 module Game.Object.Transformation ( transformations
                                   ) where
 
-import Prelewd
+import Prelewd hiding (left, right)
 
 import Control.Stream
 import Storage.Id
