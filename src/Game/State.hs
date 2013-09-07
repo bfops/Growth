@@ -8,16 +8,16 @@ module Game.State ( GameState (..)
                   , game
                   ) where 
 
-import Prelewd hiding ((!))
+import Summit.Control.Stream
+import Summit.Data.Array
+import Summit.Data.Id
+import Summit.Data.List
+import Summit.Data.Pair
+import Summit.Prelewd hiding ((!))
+import Summit.Template.MemberTransformer
 
-import Control.Stream
 import Data.Ix
 import Data.Tuple
-import Storage.Array
-import Storage.Id
-import Storage.List
-import Storage.Pair
-import Template.MemberTransformer
 
 import Game.Input
 import Game.Object
@@ -45,7 +45,7 @@ $(memberTransformers ''GameState)
 -- | Advance the GameState
 game :: Stream Id (Maybe Input) GameState
 game = bind updates
-   >>> map (updater (barr update) (initBoard, initGame) >>> arr (GameState . fst))
+   >>> map (folds (barr update) (initBoard, initGame) >>> arr (GameState . fst))
    >>> latch (GameState initBoard)
 
 updates :: Stream Id Input (Maybe GameUpdate)
@@ -59,7 +59,7 @@ updates = arr reshape >>> map creations >>> arr sequence
 creations :: Stream Id (Either Object Position) (Maybe Creation)
 creations = liftA2 (,) <$> (buffer <<< arr left) <*> arr right
     where
-        buffer = updater (barr (<|>)) Nothing
+        buffer = folds (barr (<|>)) Nothing
 
 update :: GameUpdate -> (Board, Array Position Update) -> (Board, Array Position Update)
 

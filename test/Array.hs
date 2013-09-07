@@ -1,14 +1,13 @@
 module Array (test) where
 
-import Prelewd
-
-import Impure
+import Summit.Data.Array
+import Summit.Data.Id
+import Summit.Data.List
+import Summit.Impure
+import Summit.Prelewd
 
 import Data.Char
 import Data.Tuple
-import Storage.Array
-import Storage.Id
-import Storage.List
 
 import Test.Framework
 import Test.Framework.TH

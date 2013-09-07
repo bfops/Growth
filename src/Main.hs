@@ -1,22 +1,19 @@
 {-# LANGUAGE NoImplicitPrelude
-           , TemplateHaskell
            , TupleSections
            #-}
 -- | Main module, entry point
 module Main (main) where
 
-import Prelewd
+import Summit.Impure
+import Summit.IO
+import Summit.Control.Stream
+import Summit.Prelewd
+import Summit.Data.Id
+import Summit.Data.List
+import Summit.Data.Map (lookup)
+import Summit.Data.Set
 
-import Impure
-
-import IO
-
-import Control.Stream
 import Data.Tuple
-import Storage.Id
-import Storage.List
-import Storage.Map (lookup)
-import Storage.Set
 
 import Wrappers.Events
 import Wrappers.GLFW
@@ -31,7 +28,7 @@ import Config
 
 import Main.Graphics
 
-fromMoveEvent :: Event -> Maybe (OGL.Position)
+fromMoveEvent :: Event -> Maybe OGL.Position
 fromMoveEvent (MouseMoveEvent p) = Just p
 fromMoveEvent _ = Nothing
 
@@ -52,7 +49,7 @@ main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
         resendHeld (es, pushed) = es <> (toList pushed <&> (\b -> ButtonEvent b Press))
 
 holdInputs :: Stream Id Event (Set Button)
-holdInputs = updater (barr holdInput) mempty
+holdInputs = folds (barr holdInput) mempty
     where
         holdInput (ButtonEvent b Release) pushed = pushed \\ set [b]
         holdInput (ButtonEvent b Press) pushed = pushed <> set [b]
@@ -70,7 +67,7 @@ convertEvents = identify origin &&& id
         convertEvent _ _ = return Nothing
 
 origin :: Stream Id Event Position
-origin = arr cameraMoves >>> updater (barr (+)) 0
+origin = arr cameraMoves >>> folds (barr (+)) 0
     where
         cameraMoves (ButtonEvent (KeyButton KeyLeft) Press) = Vector (-1) 0
         cameraMoves (ButtonEvent (KeyButton KeyRight) Press) = Vector 1 0

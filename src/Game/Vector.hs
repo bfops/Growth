@@ -18,13 +18,12 @@ module Game.Vector ( Vector (..)
                    , dot
                    ) where
 
-import Prelewd
+import Summit.Data.Member
+import Summit.Prelewd
 
 import Data.Ix
 import Data.Maybe
 import Data.Tuple
-
-import Storage.Member
 
 import Test.QuickCheck hiding (vector)
 import Text.Show

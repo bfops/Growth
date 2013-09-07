@@ -9,13 +9,13 @@ module Game.Object.Behaviour ( Behaviour
                              , heat
                              ) where
 
-import Prelewd
+import Summit.Control.Stream
+import Summit.Data.Id
+import Summit.Data.Member
+import Summit.Impure
+import Summit.Prelewd
 
-import Impure
-
-import Control.Stream
 import Data.Tuple
-import Storage.Id
 
 import Game.Object.Type
 
@@ -39,7 +39,7 @@ b `except` ex = Stream $ \seeds -> case (b $< seeds, ex $< seeds) of
 count :: Integer -> (Seeds -> Integer) -> Behaviour
 count 0 _ = error "count 0 causes instant change"
 count n c = wait
-          $ updater (barr $ newCount . c) 0
+          $ folds (barr $ newCount . c) 0
         >>> arr (iff (n > 0) (>= n) (<= n))
     where
         newCount d i = try (iff (n > 0) max min) 0 $ d + i
@@ -48,7 +48,7 @@ neighbour :: (Maybe Object -> Bool) -> Seeds -> Integer
 neighbour n = foldr (flip $ foldr $ \x -> if' (n x) (+ 1)) 0
 
 mix :: Object -> Behaviour
-mix = wait . arr . any . any . (==) . Just
+mix = wait . arr . any . elem . Just
 
 heat :: Integer -> Behaviour
 heat n = count n $ \s -> sum $ sum . map (\o -> deltaHeat <$> o <?> 0) <$> s

@@ -5,9 +5,8 @@ module Main.Graphics ( initOpenGL
                      , resize
                      ) where
 
-import Prelewd
-
-import IO
+import Summit.IO
+import Summit.Prelewd
 
 import Game.Render
 import Game.State

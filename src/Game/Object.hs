@@ -7,12 +7,12 @@ module Game.Object ( object
                    , Board
                    ) where
 
-import Prelewd
+import Summit.Control.Stream
+import Summit.Data.Array
+import Summit.Data.Id
+import Summit.Prelewd
 
-import Control.Stream
 import Data.Tuple
-import Storage.Array
-import Storage.Id
 
 import Physics.Types
 

@@ -5,12 +5,11 @@
 module Game.Render ( Drawable (..)
                    ) where
 
-import Prelewd
-
-import IO
+import Summit.IO
+import Summit.Prelewd
+import Summit.Data.Array
 
 import Data.Tuple
-import Storage.Array
 
 import Game.Object.Type
 import Game.State

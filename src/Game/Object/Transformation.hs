@@ -3,10 +3,9 @@
 module Game.Object.Transformation ( transformations
                                   ) where
 
-import Prelewd hiding (left, right)
-
-import Control.Stream
-import Storage.Id
+import Summit.Control.Stream
+import Summit.Prelewd hiding (left, right)
+import Summit.Data.Id
 
 import Game.Object.Type
 import Game.Object.Behaviour

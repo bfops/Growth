@@ -11,10 +11,10 @@ module Physics.Types ( PhysicsValue
                      , Position
                      ) where
 
-import Prelewd
+import Summit.Prelewd
+import Summit.Subset.Num
 
 import Data.Fixed
-import Subset.Num
 
 import Game.Vector
 

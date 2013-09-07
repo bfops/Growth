@@ -22,10 +22,10 @@ module Game.Object.Type ( Object (..)
                         , solid
                         ) where
 
-import Prelewd hiding (left, right)
+import Summit.Data.Pair
+import Summit.Prelewd hiding (left, right)
 
 import Data.Tuple
-import Storage.Pair
 import Text.Show
 
 import Game.Vector

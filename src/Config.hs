@@ -13,12 +13,12 @@ module Config ( viewDist
               , initBoard
               ) where
 
-import Prelewd
+import Summit.Data.Array
+import Summit.Data.List
+import Summit.Data.Map
+import Summit.Prelewd
 
 import Data.Tuple
-import Storage.Array
-import Storage.List
-import Storage.Map
 
 import Game.Input
 import Game.Object

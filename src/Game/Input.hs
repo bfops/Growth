@@ -3,7 +3,7 @@
 module Game.Input ( Input (..)
                   ) where
 
-import Prelewd
+import Summit.Prelewd
 
 import Text.Show
 
