@@ -75,8 +75,7 @@ transformations :: Monad m => Object -> [Transformation m]
 transformations Fire = [magmify, waterThrough]
 transformations Grass =
     [ magmify
-    , wait (mix Fire) $> state Fire
-    , wait (mix $ Lava False) $> state Fire
+    , heat =$ exceed 2 $> state Fire
     ]
 
 transformations (Water s)
