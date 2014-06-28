@@ -1,24 +1,26 @@
-{-# LANGUAGE NoImplicitPrelude
-           , TupleSections
-           #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeOperators #-}
 -- | Main module, entry point
 module Main (main) where
 
-import Summit.Impure
-import Summit.IO
-import Summit.Control.Stream
-import Summit.Prelewd
-import Summit.Data.Id
-import Summit.Data.List
-import Summit.Data.Map (lookup)
-import Summit.Data.Set
-
-import Data.Tuple
+import Control.Applicative
+import Control.Concurrent (threadDelay)
+import Control.Monad
+import Data.Conduit as Conduit
+import Data.Conduit.List as Conduit
+import Data.Foldable as Foldable
+import Data.Functor
+import Data.HashMap.Strict as HashMap
+import Data.OpenUnion
+import System.Exit
 
 import Wrappers.Events
 import Wrappers.GLFW
 import qualified Wrappers.OpenGL as OGL
 
+import Data.Conduit.Extra
 import Game.Input
 import Game.State
 import Game.Vector
@@ -28,59 +30,52 @@ import Config
 
 import Main.Graphics
 
-fromMoveEvent :: Event -> Maybe OGL.Position
-fromMoveEvent (MouseMoveEvent p) = Just p
-fromMoveEvent _ = Nothing
-
-severalEvents :: (Applicative m, Monad m) => Stream m a b -> Stream m [a] b
-severalEvents s = map s >>> identify (arr last >>> latch (error "No initial event!"))
-
 -- | Entry point
-main :: SystemIO ()
-main = runIO $ runGLFW displayOpts (0, 0 :: Integer) title $ do
+main :: IO ()
+main = void $ runGLFW title Nothing (0, 0 :: Integer) windowSize $ \wnd -> do
         initOpenGL
-        initEvents
-        iterateM_ (map snd . ($< ())) $ events
-                                    >>> identify (id &&& severalEvents holdInputs >>> arr resendHeld)
-                                    >>> severalEvents (convertEvents >>> map (identify game))
-                                    >>> lift (barr updateGraphics)
-                                    >>> lift (arr $ \_-> io $ sleep 0.1)
-    where
-        resendHeld (es, pushed) = es <> (toList pushed <&> (\b -> ButtonEvent b Press))
+        initEvents wnd
+        putStrLn "starting main loop"
+        events
+          $= convertEvents
+          $= mapSecond game
+          $$ Conduit.mapM_ (ioUpdates wnd)
+  where
+    events :: Source IO (Union '[Event, Tick])
+    events
+        =  forever (yieldM $ fmap liftUnion <$> popEvents)
+        $= Conduit.map (liftUnion Tick :)
+        $= Conduit.concat
 
-holdInputs :: Stream Id Event (Set Button)
-holdInputs = folds (barr holdInput) mempty
-    where
-        holdInput (ButtonEvent b Release) pushed = pushed \\ set [b]
-        holdInput (ButtonEvent b Press) pushed = pushed <> set [b]
-        holdInput _ pushed = pushed
+    ioUpdates wnd (pos, gs) = do
+      updateGraphics wnd pos gs
+      threadDelay 10000
 
-convertEvents :: Stream IO Event (Position, Maybe Input)
-convertEvents = identify origin &&& id
-              >>> identify (arr fst) &&& lift (convertEvent <$> mousePos <*> arr snd)
-    where
-        convertEvent :: Maybe Position -> Event -> IO (Maybe Input)
-        convertEvent _ CloseEvent = mzero
-        convertEvent _ (ResizeEvent s) = resize s $> Nothing
-        convertEvent _ (ButtonEvent (KeyButton key) Press) = return $ lookup key keymap
-        convertEvent mouse (ButtonEvent (MouseButton MouseButton0) Press) = return $ clickAction <$> mouse
-        convertEvent _ _ = return Nothing
+convertEvents :: Conduit (Union '[Event, Tick]) IO (Position, Union '[Input, Tick])
+convertEvents = void (mapAccumM convertUnion (0, Nothing)) =$= Conduit.catMaybes
+  where
+    convertUnion = convertEvent @> convertTick @> typesExhausted
 
-origin :: Stream Id Event Position
-origin = arr cameraMoves >>> folds (barr (+)) 0
-    where
-        cameraMoves (ButtonEvent (KeyButton KeyLeft) Press) = Vector (-1) 0
-        cameraMoves (ButtonEvent (KeyButton KeyRight) Press) = Vector 1 0
-        cameraMoves (ButtonEvent (KeyButton KeyDown) Press) = Vector 0 (-1)
-        cameraMoves (ButtonEvent (KeyButton KeyUp) Press) = Vector 0 1
-        cameraMoves _ = 0
+    convertTick Tick (origin, mouse) = return ((origin, mouse), Just (origin, liftUnion Tick))
 
-mousePos :: Stream Id (Position, Event) (Maybe Position)
-mousePos = map mouseWindowPos >>> arr convertPos
-    where
-        mouseWindowPos = arr fromMoveEvent >>> latch (error "No initial mouse event")
+    convertEvent CloseEvent _ = do
+      putStrLn "exiting"
+      exitSuccess
+    convertEvent (ResizeEvent s) a = do
+      putStrLn "resizing"
+      resize s $> (a, Nothing)
+    convertEvent (MouseButtonEvent MouseButton'1 MouseButtonState'Pressed _) a@(origin, mouse) = return (a, (origin,) . liftUnion . clickAction <$> mouse)
+    convertEvent (MouseMoveEvent pos) (origin, _) = return ((origin, convertPos origin pos), Nothing)
+    convertEvent (KeyEvent Key'Left KeyState'Pressed _) (origin, mouse) = return ((origin - Vector 1 0, mouse), Nothing)
+    convertEvent (KeyEvent Key'Right KeyState'Pressed _) (origin, mouse) = return ((origin + Vector 1 0, mouse), Nothing)
+    convertEvent (KeyEvent Key'Up KeyState'Pressed _) (origin, mouse) = return ((origin + Vector 0 1, mouse), Nothing)
+    convertEvent (KeyEvent Key'Down KeyState'Pressed _) (origin, mouse) = return ((origin - Vector 0 1, mouse), Nothing)
+    convertEvent (KeyEvent key KeyState'Pressed _) a@(origin, _) = return (a, (origin,) . liftUnion <$> HashMap.lookup key keymap)
+    convertEvent (KeyEvent key KeyState'Repeating s) a = convertEvent (KeyEvent key KeyState'Pressed s) a
+    convertEvent _ a = return (a, Nothing)
 
-        convertPos :: (Position, OGL.Position) -> Maybe Position
-        convertPos (o, OGL.Position x y) = let
-                p = Vector x (snd windowSize - y) <&> (*) <*> screenDims <&> div <*> uncurry Vector windowSize
-            in cast (and . liftA2 (\bound i -> i >= 0 && i < bound) boardDims) $ p + o
+    convertPos :: Position -> OGL.Position -> Maybe Position
+    convertPos o (OGL.Position x y) = let
+            p0 = div <$> ((*) <$> Vector x (snd windowSize - y) <*> screenDims) <*> uncurry Vector windowSize
+            p = fromIntegral <$> p0
+        in mfilter (Foldable.and . liftA2 (\bound i -> i >= 0 && i < bound) boardDims) $ Just (p + o)

@@ -1,88 +1,133 @@
-{-# LANGUAGE NoImplicitPrelude
-           #-}
-module Game.Object.Transformation ( transformations
+{-# LANGUAGE DoAndIfThenElse #-}
+{-# LANGUAGE LambdaCase #-}
+module Game.Object.Transformation ( Transformation
+                                  , NewState (..)
+                                  , transformations
                                   ) where
 
-import Summit.Control.Stream
-import Summit.Prelewd hiding (left, right)
-import Summit.Data.Id
+import Control.Applicative
+import Control.Lens ((<&>))
+import Control.Monad
+import Data.Conduit as Conduit
+import Data.Functor
+import Data.Foldable as Foldable
+import Data.Monoid
 
-import Game.Object.Type
+import Data.Conduit.Extra as Conduit
 import Game.Object.Behaviour
+import Game.Object.Type
 
-type Transformation = Stream (Either Object) Seeds ()
+data NewState
+    = State Object Bool
+  deriving (Show, Read, Eq, Ord)
 
-infix 1 =>>
-(=>>) :: Behaviour -> Object -> Transformation
-b =>> obj = Stream $ \seeds -> (=>> obj) <$$> (b $< seeds) <&> Right <?> Left obj
+state :: Object -> NewState
+state o = State o False
 
-waterFlow :: Stream Id Seeds (Maybe Flow)
-waterFlow = arr $ \seeds -> considerGround (down seeds) <$> resultFlow seeds
-    where
-        considerGround ground flow = Just $ iff (solid ground) flow (False, False)
+rerun :: Object -> NewState
+rerun o = State o True
 
-        resultFlow seeds = if water $ up seeds
-                           then Just (True, True)
-                           else let l = rightWater $ left seeds
-                                    r = leftWater $ right seeds
-                                in mcond (l || r) (not l, not r)
+type Neighbours = Seeds
+type Transformation m = Sink Neighbours m NewState
+
+-- | Get info about the water flowing through this tile from info about the neighbors.
+waterFlow :: Neighbours -> Maybe Flow
+waterFlow s
+    = let
+        below = down s
+        above = up s
+        l = rightWater $ left s
+        r = leftWater $ right s
+      in do
+        guard $ water above || l || r
+        Just $ Just $
+          if not (solid below)
+          then (False, False)
+          else
+            if water above
+            then (True, True)
+            else (not l, not r)
 
 -- | Incorporate flowing Water
-hydrophilic :: Behaviour
-hydrophilic = lift $ waterFlow >>> arr (\m -> (\_-> Nothing) <$> m <?> Just ())
+hydrophilic :: Neighbours -> Bool
+hydrophilic = maybe False (\_-> True) . waterFlow
 
--- | Water will flow through these tiles
-waterThrough :: Transformation
-waterThrough = lift $ waterFlow >>> arr (\m -> Left . Water <$> m <?> Right ())
+-- | Water will flow through (and occupy) these tiles
+waterThrough :: Monad m => Transformation m
+waterThrough = do
+    neighbors <- waterFlow <$> awaitJust
+    case neighbors of
+      Nothing -> waterThrough
+      Just w -> return $ state $ Water w
 
-magmify :: Transformation
-magmify = mix (Lava True) =>> Lava False
+magmify :: Monad m => Transformation m
+magmify = wait (mix $ Lava True) $> state (Lava False)
 
-lavaToRock :: Behaviour
-lavaToRock = sequence_ [hydrophilic, mix Air]
+-- | The conditions for Lava to convert to Rock
+lavaToRock :: Neighbours -> Bool
+lavaToRock s = Foldable.any ($ s) [hydrophilic, mix Air]
 
-snowFall :: Transformation
-snowFall = wait (arr $ snow . up) =>> Snow
+snowFall :: Monad m => Transformation m
+snowFall = wait (snow . up) $> state Snow
 
-transformations :: Object -> [Transformation]
+transformations :: Monad m => Object -> [Transformation m]
 
 transformations Fire = [magmify, waterThrough]
-transformations Grass = [magmify, mix Fire =>> Fire, mix (Lava False) =>> Fire]
+transformations Grass =
+    [ magmify
+    , wait (mix Fire) $> state Fire
+    , wait (mix $ Lava False) $> state Fire
+    ]
 
-transformations (Water s) = [magmify, heat (-16) =>> Ice, lift flow, snowFall]
-    where
-        flow = if s == Nothing
-               then arr $ \_-> Right ()
-               else waterFlow <&> \m -> diff . Water <$> m <?> Left Air
+transformations (Water s)
+    = let flowOrNull = maybe [] (\_-> [flow]) s
+      in [magmify, heat =$ exceed (-16) $> state Ice] <> flowOrNull <> [snowFall]
+  where
+    flow = do
+      f <- waterFlow <$> awaitJust
+      case f of
+        -- This is a non-source block and no more water is flowing through this tile.
+        Nothing -> return $ state Air
+        Just s' ->
+          if s == s'
+          then flow
+          else return $ state (Water s')
 
-        diff obj = iff (obj == Water s) (Right ()) (Left obj)
+transformations (Lava b)
+    = [wait volcano $> state (Lava True), wait lavaToRock $> state Rock]
+    <> (if b then [despawn] else [])
+  where
+      volcano s
+          = Foldable.all lava ([left, right, down] <&> ($ s))
+          && (rock (up s) || dirt (up s))
 
-transformations (Lava b) = [wait (arr volcano) =>> Lava True, lavaToRock =>> Rock]
-                        <> mcond b despawn
-    where
-        volcano seeds = all lava ([left, right, down] <&> ($ seeds)) && (rock (up seeds) || dirt (up seeds))
+      despawn = wait (Foldable.all (Foldable.all molten)) $> state (Lava False)
 
-        despawn = wait (arr $ all $ all $ lava <&> (||) <*> rock) =>> Lava False
+      molten obj = lava obj || rock obj
 
 transformations Rock =
-        [ count 32 (neighbour water) `except` wait (arr $ any $ any lava) =>> Dirt
+        [ count (neighbour water) =$ exceed 32 $> rerun Dirt
         , volcano
-        , heat 8 `except` lavaToRock =>> Lava False
+        , heat =$ exceed 8 $> rerun (Lava False)
         , magmify
         ]
     where
-        volcano = wait (arr $ (Just (Lava True) ==) . down) =>> Lava True
+        volcano = wait ((Just (Lava True) ==) . down) $> state (Lava True)
 
-transformations Dirt = [mix (Lava False) =>> Lava False, magmify]
+transformations Dirt = [wait (mix $ Lava False) $> state (Lava False), magmify]
 
-transformations Air = [magmify, waterThrough, count 32 (neighbour dirt) =>> Grass, snowFall]
+transformations Air = [magmify, waterThrough, count (neighbour dirt) =$ exceed 32 $> state Grass, snowFall]
 
-transformations Ice = [magmify, heat 2 =>> Water Nothing]
+transformations Ice = [magmify, heat =$ exceed 2 $> state (Water Nothing)]
 
+-- TODO: transfer heat properly when moving
 transformations Snow =
-        [ heat 1 =>> Water Nothing
-        , wait (arr $ not . solid . down) =>> Air
-        , count 32 (arr snowToIce) =>> Ice
+        [ heat =$ exceed 1 $> state (Water Nothing)
+        , wait (not . solid . down) $> state Air
+        , count snowToIce =$ exceed 32 $> state Ice
         ]
-    where
-        snowToIce s = iff (all (all solid) s) (neighbour snow s) 0
+  where
+    snowToIce s =
+        if Foldable.all (Foldable.all solid) s
+        then neighbour snow s
+        else 0

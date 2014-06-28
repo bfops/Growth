@@ -1,18 +1,15 @@
-{-# LANGUAGE NoImplicitPrelude
-           , FlexibleInstances
-           , MultiParamTypeClasses
-           #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 -- | Functions and data structures for dealing with physical game aspects
 module Physics.Types ( PhysicsValue
                      , Scalar
                      , Time
                      , Distance
+                     , Heat
+                     , HeatCapacity
                      , Size
                      , Position
                      ) where
-
-import Summit.Prelewd
-import Summit.Subset.Num
 
 import Data.Fixed
 
@@ -25,11 +22,14 @@ type PhysicsValue = Integer
 type Scalar = PhysicsValue
 
 -- | Against which rates are measured
-type Time = Nonnegative Milli
+type Time = Milli
 -- | Measure of space
 type Distance = PhysicsValue
+-- | Measure of heat
+type Heat = Milli
+type HeatCapacity = Deci
 
 -- | Dimensions of an object
-type Size = Vector (Positive Distance)
+type Size = Vector Distance
 -- | Location in space
 type Position = Vector Distance

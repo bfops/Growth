@@ -1,13 +1,10 @@
-{-# LANGUAGE NoImplicitPrelude
-           #-}
 module Main.Graphics ( initOpenGL
                      , updateGraphics
                      , resize
                      ) where
 
-import Summit.IO
-import Summit.Prelewd
-
+import Control.Applicative
+import Data.Function
 import Game.Render
 import Game.State
 import Game.Vector
@@ -21,42 +18,44 @@ import Config
 
 -- | Initialize the OpenGL context
 initOpenGL :: IO ()
-initOpenGL = io $ do
-        shadeModel $= Smooth
-        clearDepth $= 1
-        depthFunc $= Just Less
-        hint PerspectiveCorrection $= Nicest
+initOpenGL = do
+    shadeModel $= Smooth
+    clearDepth $= 100
+    depthFunc $= Just Less
+    hint PerspectiveCorrection $= Nicest
+    clearColor $= Color4 0.25 0 0 1
 
--- | Draw one frame of the game state
-drawFrame :: Game.Position
-          -> GameState  -- ^ State to draw
-          -> IO ()
-drawFrame origin g = do
-        -- Clear the screen
-        io $ clear [ ColorBuffer, DepthBuffer ]
-        -- Reset the view
-        io loadIdentity
-        io $ translate $ vector3 $ (-2) * (realToFrac <$> origin) / screenDims
-        
-        draw g
-
-        -- Write it all to the buffer
-        io flush
-    where
-        vector3 :: Vector GLdouble -> Vector3 GLdouble
-        vector3 (Vector x y) = Vector3 x y 0
+    resize $ uncurry (Size `on` fromInteger) windowSize
 
 -- | Resize OpenGL view
 resize :: Size -> IO ()
-resize s = io $ do
-        viewport $= (Position 0 0, s)
-    
-        matrixMode $= Projection
-        loadIdentity
-    
-        matrixMode $= Modelview 0
-        loadIdentity
+resize s = do
+    viewport $= (Position 0 0, s)
+
+    matrixMode $= Projection
+    loadIdentity
+    -- Sit at (0, 0, -2), and look at the
+    -- (0, 0, 0) to (0, 1, 0) area.
+    let aspect = let (w, h) = windowSize in w / h
+    frustum 0 (1/2) 0 (1/2/aspect) 1 4
+    translate (Vector3 0 0 (-2) :: Vector3 GLdouble)
+
+    matrixMode $= Modelview 0
+    loadIdentity
 
 -- | One iteration of graphics
-updateGraphics :: Game.Position -> GameState -> IO ()
-updateGraphics origin g = drawFrame origin g >> io swapBuffers
+updateGraphics :: Window -> Game.Position -> GameState -> IO ()
+updateGraphics wnd origin g = do
+    -- Clear the screen.
+    clear [ ColorBuffer, DepthBuffer ]
+    -- Reset the view.
+    loadIdentity
+    translate $ vector3 $ negate $ (realToFrac <$> origin) / screenDims
+
+    draw g
+
+    swapBuffers wnd
+    flush
+  where
+    vector3 :: Vector GLdouble -> Vector3 GLdouble
+    vector3 (Vector x y) = Vector3 x y 0

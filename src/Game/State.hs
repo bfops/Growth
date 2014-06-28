@@ -1,24 +1,27 @@
-{-# LANGUAGE NoImplicitPrelude
-           , FlexibleContexts
-           , TemplateHaskell
-           , TupleSections
-           #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Game.State ( GameState (..)
-                  , tiles'
                   , game
                   ) where 
 
-import Summit.Control.Stream
-import Summit.Data.Array
-import Summit.Data.Id
-import Summit.Data.List
-import Summit.Data.Pair
-import Summit.Prelewd hiding ((!))
-import Summit.Template.MemberTransformer
+import Control.Applicative
+import Control.Exception
+import Control.Lens
+import Control.Monad
+import Data.Array as Array
+import Data.Conduit
+import Data.Conduit.List as Conduit
+import Data.Hashable
+import Data.OpenUnion
+import Data.Pair
+import Data.Typeable
+import GHC.Generics
 
-import Data.Ix
-import Data.Tuple
-
+import Data.Conduit.Extra
 import Game.Input
 import Game.Object
 import Game.Object.Type hiding (left, right)
@@ -27,54 +30,87 @@ import Physics.Types
 
 import Config
 
-splitA :: Ix i => Array i (e, f) -> (Array i e, Array i f)
-splitA a = listArray (bounds a) *** listArray (bounds a) $ unzip $ elems a
+unzipA :: Ix i => Array i (e, f) -> (Array i e, Array i f)
+unzipA a = let (es, fs) = unzip $ elems a
+           in (listArray (bounds a) es, listArray (bounds a) fs)
 
-infix 3 <%%>
+zipAWithM :: (Ix i, Eq i, Functor m, Monad m) => (a -> b -> m c) -> Array i a -> Array i b -> m (Array i c)
+zipAWithM f x y
+    = let bs = assert (bounds x == bounds y) $ bounds x
+      in listArray bs <$> zipWithM (\(_, a) (_, b) -> f a b) (assocs x) (assocs y)
+
+infixl 4 <%>, <%%>
+
+(<%>) :: (Functor f, Functor g) => f (a -> b) -> g a -> f (g b)
+(<%>) f g = (<$> g) <$> f
 
 (<%%>) :: (Functor f, Functor g, Functor h) => f (g (a -> b)) -> h a -> f (g (h b))
-(<%%>) fg h = (<$> h) <$$> fg
+(<%%>) fg h = fmap (<$> h) <$> fg
 
-type Creation = (Object, Position)
-type GameUpdate = Either () Creation
+data GameUpdate
+    = UpdateStep
+    | Create Position Object
+  deriving (Show, Read, Eq, Generic, Typeable)
+
+instance Hashable GameUpdate
+
+-- TODO: Remove conduits upon exhaustion.
+stepAll ::
+    (Applicative m, Monad m, Ix a, Eq a) =>
+    Array a i ->
+    Array a (ResumableConduit i m o) ->
+    m (Array a o, Array a (ResumableConduit i m o))
+stepAll is conduits = do
+    (cs, os) <- unzipA <$> zipAWithM (exhaustInput . yield) is conduits
+    return $ (fromSingle <$> os, cs)
+  where
+    fromSingle [x] = x
+    fromSingle _ = error "fromSingle"
 
 newtype GameState = GameState { tiles :: Board }
+  deriving (Show, Read, Eq)
 
-$(memberTransformers ''GameState)
+$(makeLenses ''GameState)
 
 -- | Advance the GameState
-game :: Stream Id (Maybe Input) GameState
-game = bind updates
-   >>> map (folds (barr update) (initBoard, initGame) >>> arr (GameState . fst))
-   >>> latch (GameState initBoard)
+game :: (Applicative m, Monad m) => Conduit (Union '[Input, Tick]) m GameState
+game = updates =$= void (mapAccumM updateStep (initBoard, initGame))
+  where
+    updateStep x y = do
+      (b, a) <- update x y
+      return ((b, a), GameState b)
 
-updates :: Stream Id Input (Maybe GameUpdate)
-updates = arr reshape >>> map creations >>> arr sequence
-    where
-        reshape (Select o) = Right $ Left o
-        reshape (Place p) = Right $ Right p
-        reshape Step = Left ()
+updates :: Monad m => Conduit (Union '[Input, Tick]) m (Union '[GameUpdate, Tick])
+updates = void (mapAccum (toUpdate @> tick @> typesExhausted) Nothing) =$= Conduit.catMaybes
+  where
+    toUpdate (Select o) _ = (Just o, Nothing)
+    toUpdate (Place p) o = (o, liftUnion . Create p <$> o)
+    toUpdate Step o = (o, Just $ liftUnion UpdateStep)
 
--- | What to add into the game world
-creations :: Stream Id (Either Object Position) (Maybe Creation)
-creations = liftA2 (,) <$> (buffer <<< arr left) <*> arr right
-    where
-        buffer = folds (barr (<|>)) Nothing
+    tick Tick o = (o, Just $ liftUnion Tick)
 
-update :: GameUpdate -> (Board, Array Position Update) -> (Board, Array Position Update)
+update ::
+    (Applicative m, Monad m) =>
+    Union '[GameUpdate, Tick] ->
+    (Board, Array Position (Update m)) ->
+    m (Board, Array Position (Update m))
+update = updateGame @> updateTick @> typesExhausted
+  where
+    updateTick Tick (b, a) = return (b, a)
 
-update (Right (obj, p)) (b, a) = (b // [(p, obj)], a // [(p, object obj)])
+    updateGame (Create p obj) (b, a) = return $ (b // [(p, Tile obj)], a // [(p, tile obj)])
 
-update (Left _) (b, a0) = splitA $ zipAWith (runId <$$> ($<)) a0 disseminate
-    where
-        -- Propogate each Spawn to its neighbours, so each Position will have one Object from each neighbour
-        disseminate :: Array Position Seeds
-        disseminate = listArray (bounds b) $ neighbour <$> indices b <%> dimensions <%%> Pair False True
+    updateGame UpdateStep (b, a) = stepAll disseminate a
+        where
+            -- Propogate each Spawn to its neighbours, so each Position will have one Object from each neighbour
+            disseminate :: Array Position (Neighbours Tile)
+            disseminate = let
+                in listArray (bounds b) $ neighbour <$> Array.indices b <%> dimensions <%%> Pair False True
 
-        -- Find a neighbour in a given direction, and return the Object they're spawning towards the base position
-        neighbour :: Position -> Dimension -> Bool -> Maybe Object
-        neighbour p dim pos = let p' = component' dim (iff pos (+) subtract 1) p
-                              in mcond (inRange (bounds b) p') $ b!p'
+            -- Find a neighbour in a given direction, and return the Object they're spawning towards the base position
+            neighbour :: Position -> Dimension -> Bool -> Maybe Tile
+            neighbour p dim pos = let p' = over (component dim) (if pos then (+ 1) else subtract 1) p
+                                  in guard (inRange (bounds b) p') >> Just (b!p')
 
-initGame :: Array Position Update
-initGame = object <$> initBoard
+initGame :: (Applicative m, Monad m) => Array Position (Update m)
+initGame = tile . objType <$> initBoard

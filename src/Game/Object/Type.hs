@@ -1,5 +1,4 @@
-{-# LANGUAGE NoImplicitPrelude
-           #-}
+{-# LANGUAGE DeriveGeneric #-}
 -- | Basic game object type, and associated functions
 module Game.Object.Type ( Object (..)
                         , Flow
@@ -22,16 +21,17 @@ module Game.Object.Type ( Object (..)
                         , solid
                         ) where
 
-import Summit.Data.Pair
-import Summit.Prelewd hiding (left, right)
-
-import Data.Tuple
-import Text.Show
+import Control.Applicative
+import Control.Lens
+import Data.Hashable
+import Data.Foldable as Foldable
+import Data.Pair
+import GHC.Generics
 
 import Game.Vector
 
 any' :: Foldable t => t (a -> Bool) -> a -> Bool
-any' l obj = any ($ obj) l
+any' l obj = Foldable.any ($ obj) l
 
 type Flow = Maybe (Bool, Bool)
 
@@ -45,26 +45,28 @@ data Object = Fire
             | Dirt
             | Ice
             | Snow
-    deriving (Show, Eq, Ord)
+    deriving (Show, Read, Eq, Ord, Generic)
+
+instance Hashable Object
 
 -- | Spawns from a set of neighbours
 type Seeds = Vector (Pair (Maybe Object))
 
--- | What Object is in which neighbour?
-left, right, down, up :: Seeds -> Maybe Object
-(Vector (Pair left right) (Pair down up)) = getObj <$> dimensions <%> Pair fst snd
-    where
-        getObj dim f = f . pair (,) . component dim
+-- | Given a Vector of "neighbours", get a specific one.
+left, right, down, up :: Vector (Pair a) -> a
+[left, right, down, up] = getElem <$> toList dimensions <*> (pair <$> [\x _-> x, \_ x -> x])
+  where
+    getElem dim f = f . view (component dim)
 
 water, rightWater, leftWater, lava, solid :: Maybe Object -> Bool
 
 water (Just (Water {})) = True
 water _ = False
 
-leftWater (Just (Water s)) = fst <$> s <?> True
+leftWater (Just (Water s)) = maybe True fst s
 leftWater _ = False
 
-rightWater (Just (Water s)) = snd <$> s <?> True
+rightWater (Just (Water s)) = maybe True snd s
 rightWater _ = False
 
 lava (Just (Lava _)) = True

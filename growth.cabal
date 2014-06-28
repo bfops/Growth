@@ -1,35 +1,45 @@
-Name:                Growth
-Version:             0.1
-Description:         Play with culture growth and spread mechanics
-Category:            Games
-License:             MIT
-Author:              Ben Foppa
-Maintainer:          benjamin.foppa@gmail.com
-Build-Type:          Simple
-Cabal-Version:       >= 1.9.2
+name:                growth
+version:             0.1.0
+description:         Play with culture growth and spread mechanics
+category:            Games
+license:             MIT
+author:              Ben Foppa
+maintainer:          benjamin.foppa@gmail.com
+build-type:          Simple
+cabal-version:       >= 1.9.2
 
-Executable Growth
+executable growth
     hs-source-dirs: src/
-    Main-is:        Main.hs
-    GHC-Options:    -Wall -Werror -threaded -rtsopts=all -fno-warn-orphans
+    main-is:        Main.hs
+    ghc-options:    -Wall -threaded -rtsopts=all
 
-    Build-Depends: 
-                    Summit == 0.15,
-                    Game-Wrappers == 0.2,
+    build-depends:
+                    array,
+                    base,
+                    basic-prelude,
+                    conduit == 1.1.*,
+                    conduit-resumablesink == 0.1.* && >= 0.1.1.0,
+                    game-wrappers == 0.5.* && >= 0.5.2,
+                    hashable,
+                    lens == 4.2.*,
+                    open-union == 0.0.*,
                     QuickCheck >= 2,
-                    base
+                    transformers,
+                    unordered-containers,
+                    vector
 
-test-suite Tests
+test-suite tests
     type:           exitcode-stdio-1.0
     hs-source-dirs: test/
                     src/
     main-is:        Test.hs
-    extensions:     TupleSections, GeneralizedNewtypeDeriving, TemplateHaskell, NoImplicitPrelude, BangPatterns
+    ghc-options:    -Wall -threaded -rtsopts=all -fno-warn-orphans -fno-warn-missing-signatures
+    extensions:     TupleSections, GeneralizedNewtypeDeriving, TemplateHaskell, BangPatterns
 
-    build-depends: 
-                    QuickCheck >= 2,
-                    Summit,
+    build-depends:
+                    array,
                     HUnit,
+                    QuickCheck >= 2,
                     test-framework-quickcheck2,
                     test-framework-hunit,
                     test-framework-th,

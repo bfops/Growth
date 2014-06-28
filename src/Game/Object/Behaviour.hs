@@ -1,59 +1,61 @@
-{-# LANGUAGE NoImplicitPrelude
-           #-}
+{-# LANGUAGE DoAndIfThenElse #-}
 module Game.Object.Behaviour ( Behaviour
                              , wait
-                             , except
+                             , exceed
                              , count
                              , neighbour
                              , mix
                              , heat
                              ) where
 
-import Summit.Control.Stream
-import Summit.Data.Id
-import Summit.Data.Member
-import Summit.Impure
-import Summit.Prelewd
+import Control.Monad
+import Data.Conduit
+import Data.Conduit.List as Conduit
+import Data.Foldable as Foldable
 
-import Data.Tuple
-
+import Data.Conduit.Extra
 import Game.Object.Type
 
-type Behaviour = Stream Maybe Seeds ()
+-- | Wait for a value to surpass a target (in either direction)
+exceed :: (Num i, Ord i, Monad m) => i -> Sink i m ()
+exceed target = do
+    i <- awaitJust
+    if signum i == signum target && abs i > abs target
+    then return ()
+    else exceed target
 
-wait :: Stream Id Seeds Bool -> Behaviour
-wait s = lift $ s >>> arr (\b -> mcond (not b) ())
+type Behaviour m = Sink Seeds m ()
 
-infixl 2 `except`
--- | Create a Behaviour which, upon termination, will first check some other Behaviour for confirmation.
--- Note that both Behaviours advance every time the resultant Behaviour advances.
-except :: Behaviour     -- ^ Terminating Behaviour
-       -> Behaviour     -- ^ Upon termination, check this Behaviour.
-                        -- If it also terminates, refute the termination of the original Behaviour.
-       -> Behaviour
-b `except` ex = Stream $ \seeds -> case (b $< seeds, ex $< seeds) of
-                            (Nothing, Just _) -> Nothing
-                            (b', ex') -> Just ((), snd <$> b' <?> b `except` snd <$> ex' <?> ex)
+-- | wait until the output becomes True.
+wait :: Monad m => (i -> Bool) -> Sink i m ()
+wait s = Conduit.map s =$= go
+  where
+    go = do
+      b <- awaitJust
+      if b then return () else go
 
--- | Accumulate a count until a specified goal
-count :: Integer -> (Seeds -> Integer) -> Behaviour
-count 0 _ = error "count 0 causes instant change"
-count n c = wait
-          $ folds (barr $ newCount . c) 0
-        >>> arr (iff (n > 0) (>= n) (<= n))
-    where
-        newCount d i = try (iff (n > 0) max min) 0 $ d + i
+-- | Accumulate a count.
+count :: Monad m => (i -> Integer) -> Conduit i m Integer
+count c = Conduit.map c =$= void (scan (+) 0)
+
+mapreduce :: (Functor t, Foldable t) => (b -> b -> b) -> b -> (a -> b) -> t a -> b
+mapreduce reduce b f = Foldable.foldl' reduce b . fmap f
+
+mapsum :: (Functor t, Foldable t, Num b) => (a -> b) -> t a -> b
+mapsum = mapreduce (+) 0
 
 neighbour :: (Maybe Object -> Bool) -> Seeds -> Integer
-neighbour n = foldr (flip $ foldr $ \x -> if' (n x) (+ 1)) 0
+neighbour n = mapsum $ mapsum $ \x -> if n x then 1 else 0
 
-mix :: Object -> Behaviour
-mix = wait . arr . any . elem . Just
+mix :: Object -> Seeds -> Bool
+mix obj = Foldable.any $ Foldable.elem $ Just obj
 
-heat :: Integer -> Behaviour
-heat n = count n $ \s -> sum $ sum . map (\o -> deltaHeat <$> o <?> 0) <$> s
-    where
-        deltaHeat Fire = 2
-        deltaHeat (Lava b) = iff b 12 8
-        deltaHeat Ice = -1
-        deltaHeat _ = 0
+-- | Keep track of accumulated heat from neighbors.
+heat :: Monad m => Conduit Seeds m Integer
+heat = count $ mapsum $ mapsum $ maybe 0 deltaHeat
+  where
+    deltaHeat Fire = 2
+    deltaHeat (Lava True) = 12
+    deltaHeat (Lava False) = 8
+    deltaHeat Ice = -1
+    deltaHeat _ = 0
