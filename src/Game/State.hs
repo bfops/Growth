@@ -16,15 +16,17 @@ import Control.Monad
 import Data.Array as Array
 import Data.Conduit
 import Data.Conduit.List as Conduit
+import Data.Conduit.ResumableSink
 import Data.Either
+import Data.Foldable as Foldable
+import Data.Function
 import Data.Hashable
+import Data.Maybe as Maybe
 import Data.OpenUnion
 import Data.Pair
-import Data.Conduit.ResumableSink
 import Data.Typeable
 import GHC.Generics
 
-import Data.Conduit.Extra
 import Game.Input
 import Game.Object.Transformation
 import Game.Object.Type hiding (left, right)
@@ -37,10 +39,15 @@ unzipA :: Ix i => Array i (e, f) -> (Array i e, Array i f)
 unzipA a = let (es, fs) = unzip $ elems a
            in (listArray (bounds a) es, listArray (bounds a) fs)
 
-zipAWithM :: (Ix i, Eq i, Functor m, Monad m) => (a -> b -> m c) -> Array i a -> Array i b -> m (Array i c)
-zipAWithM f x y
+zipAWithIxM :: (Ix i, Eq i, Functor m, Monad m) => (i -> a -> b -> m c) -> Array i a -> Array i b -> m (Array i c)
+zipAWithIxM f x y
     = let bs = assert (bounds x == bounds y) $ bounds x
-      in listArray bs <$> zipWithM (\(_, a) (_, b) -> f a b) (assocs x) (assocs y)
+      in listArray bs <$> zipWithM (\(i, a) (_, b) -> f i a b) (assocs x) (assocs y)
+
+zipAWith :: (Ix i, Eq i) => (a -> b -> c) -> Array i a -> Array i b -> Array i c
+zipAWith f x y
+    = let bs = assert (bounds x == bounds y) $ bounds x
+      in listArray bs $ zipWith (\(_, a) (_, b) -> f a b) (assocs x) (assocs y)
 
 infixl 4 <%>, <%%>
 
@@ -53,38 +60,45 @@ infixl 4 <%>, <%%>
 data GameUpdate
     = UpdateStep
     | Create Position Object
-  deriving (Show, Read, Eq, Generic, Typeable)
+  deriving (Show, Eq, Generic, Typeable)
 
 instance Hashable GameUpdate
 
--- TODO: Remove conduits upon exhaustion.
-stepAll ::
-    (Applicative m, Monad m, Ix a, Eq a) =>
-    Array a i ->
-    Array a (ResumableConduit i m o) ->
-    m (Array a o, Array a (ResumableConduit i m o))
-stepAll is conduits = do
-    (cs, os) <- unzipA <$> zipAWithM (exhaustInput . yield) is conduits
-    return $ (fromSingle <$> os, cs)
-  where
-    fromSingle [x] = x
-    fromSingle _ = error "fromSingle"
+type Transformations m = [ResumableSink m TileUpdateIn BoardUpdate]
+
+resumeSink :: Monad m => [i] -> ResumableSink m i r -> m (Either r (ResumableSink m i r))
+resumeSink is s = sourceList is ++$$ s
 
 newtype GameState = GameState { tiles :: Board Tile }
-  deriving (Show, Read, Eq)
+  deriving (Show, Eq)
 
-$(makeLenses ''GameState)
+-- | A `Tile` coupled with an updater.
+data UpdateTile m = UpdateTile
+    { getTile :: Tile
+    , getTransformations :: Transformations m
+    }
+
+makeUpdateTile :: Monad m => Tile -> UpdateTile m
+makeUpdateTile t = UpdateTile
+    { getTile = t
+    , getTransformations = newResumableSink <$> transformations (view tileObject t)
+    }
+
+applyUpdate :: Monad m => TileUpdate -> UpdateTile m -> UpdateTile m
+applyUpdate (UpdateObject f) t = makeUpdateTile $ over tileObject f $ getTile t
+applyUpdate (UpdateHeat f) t = t { getTile = over tileHeat f $ getTile t }
+applyUpdate (RemakeTile obj) _ = makeUpdateTile $ makeTile obj
+applyUpdate (u1 :& u2) t = applyUpdate u1 $ applyUpdate u2 t
 
 -- | Advance the GameState
 game :: (Applicative m, Monad m) => Conduit (Union '[Input, Tick]) m GameState
-game = updates =$= void (mapAccumM updateStep (initBoard, initGame))
-  where
-    updateStep x y = do
-      (b, a) <- update x y
-      return ((b, a), GameState b)
+game
+    = toGameUpdates
+  =$= void (scanM updateBoard initGame)
+  =$= Conduit.map (GameState . fmap getTile)
 
-updates :: Monad m => Conduit (Union '[Input, Tick]) m (Union '[GameUpdate, Tick])
-updates = void (mapAccum (toUpdate @> tick @> typesExhausted) Nothing) =$= Conduit.catMaybes
+toGameUpdates :: Monad m => Conduit (Union '[Input, Tick]) m (Union '[GameUpdate, Tick])
+toGameUpdates = void (mapAccum (toUpdate @> tick @> typesExhausted) Nothing) =$= Conduit.catMaybes
   where
     toUpdate (Select o) _ = (Just o, Nothing)
     toUpdate (Place p) o = (o, liftUnion . Create p <$> o)
@@ -92,56 +106,80 @@ updates = void (mapAccum (toUpdate @> tick @> typesExhausted) Nothing) =$= Condu
 
     tick Tick o = (o, Just $ liftUnion Tick)
 
-update ::
+-- | Apply a single update operation to the board(s).
+updateBoard ::
     (Applicative m, Monad m) =>
     Union '[GameUpdate, Tick] ->
-    (Board Tile, Array Position (Update m)) ->
-    m (Board Tile, Array Position (Update m))
-update = force . (updateGame @> updateTick @> typesExhausted)
+    Board (UpdateTile m) ->
+    m (Board (UpdateTile m))
+updateBoard = force $ updateGame @> updateTick @> typesExhausted
   where
-    updateTick Tick (b, a) = return (b, a)
+    -- identity event just to force re-evaluation down the line.
+    -- (e.g. a re-rendering may occur because we yield again).
+    updateTick Tick a = return a
 
-    updateGame (Create p obj) (b, a) = return $ (b // [(p, makeTile obj)], a // [(p, tileUpdater obj)])
-
-    updateGame UpdateStep (b, a) = stepAll disseminate a
+    updateGame (Create p obj) b = return $ b // [(p, makeUpdateTile (makeTile obj))]
+    updateGame UpdateStep b = do
+          let
+            -- Propogate each tile to its neighbours.
+            inputs :: Board (Neighbours Tile)
+            inputs = listArray (bounds b) $ neighbour <$> Array.indices b <%> dimensions <%%> Pair False True
+          (b', changes) <- unzipA <$> zipAWithIxM updateTile inputs b
+          let
+            changeArray :: Board (Maybe TileUpdate)
+            changeArray = Foldable.foldr setPos (listArray (bounds b') (repeat Nothing)) $ Foldable.concat changes
+          return $ zipAWith makeChanges b' changeArray
         where
-            -- Propogate each Spawn to its neighbours, so each Position will have one Object from each neighbour
-            disseminate :: Array Position (Neighbours Tile)
-            disseminate = let
-                in listArray (bounds b) $ neighbour <$> Array.indices b <%> dimensions <%%> Pair False True
-
-            -- Find a neighbour in a given direction, and return the Object they're spawning towards the base position
+            -- Find the Tile in the given direction.
             neighbour :: Position -> Dimension -> Bool -> Maybe Tile
             neighbour p dim pos = let p' = over (component dim) (if pos then (+ 1) else subtract 1) p
-                                  in guard (inRange (bounds b) p') >> Just (b!p')
+                                  in guard (inRange (bounds b) p') >> Just (getTile $ b!p')
 
-initGame :: (Applicative m, Monad m) => Array Position (Update m)
-initGame = tileUpdater . view tileObject <$> initBoard
+            setPos (p, v) a = a // [(p, Just v)]
 
-type Update m = ResumableConduit (Neighbours Tile) m Tile
-type Transformations m = [ResumableSink m (Neighbours Tile) NewState]
+            makeChanges t Nothing = t
+            makeChanges t (Just u) = applyUpdate u t
 
-resumeSink :: Monad m => [i] -> ResumableSink m i r -> m (Either r (ResumableSink m i r))
-resumeSink is s = sourceList is ++$$ s
+-- TODO: finalize ResumableSinks properly
+-- TODO: Remove conduits upon exhaustion.
+updateTile ::
+    (Monad m, Applicative m) =>
+    Position ->
+    Neighbours Tile ->
+    UpdateTile m ->
+    m (UpdateTile m, [(Position, TileUpdate)])
+updateTile p0 ns ut0 = do
+    let heat' = updateHeat ns (getTile ut0)
+    let t' = set tileHeat heat' (getTile ut0)
+    let i = TileUpdateIn t' ns
+    (changes, transformers')
+        <- partitionEithers <$> traverse (resumeSink [i]) (getTransformations ut0)
+    let ut' = ut0
+              { getTile = t'
+              , getTransformations = transformers'
+              }
+    return (ut', [(toPosition p0 p, x) | (p, x) <- Foldable.concat changes])
 
-tileState :: Monad m => Object -> (Tile, Transformations m)
-tileState obj = (makeTile obj, newResumableSink <$> transformations obj)
+average :: Fractional a => [a] -> a
+average l = Foldable.sum l / realToFrac (length l)
 
-tileUpdater :: (Applicative m, Monad m) => Object -> Update m
-tileUpdater obj = newResumableConduit $ void $ mapAccumM updateAndProduceTile (tileState obj)
+updateHeat :: Neighbours Tile -> Tile -> Heat
+updateHeat ns current =
+    let flatNeighbours = Maybe.catMaybes $ Foldable.concatMap toList ns
+    in view tileHeat current + realToFrac (average $ dE <$> flatNeighbours)
   where
-    updateAndProduceTile a b = updateTile a b <&> \(t', ts') -> ((t', ts'), t')
+      -- the amount of energy to change by to move toward temperature equilibrium
+      -- with another tile.
+      dE :: Tile -> Double
+      dE neighbour =
+        let
+          totalHeatE = ((+) `on` realToFrac . view tileHeat) neighbour current
+          relativeCapacity = ((/) `on` realToFrac . capacity . view tileObject) neighbour current
+          -- the amount of heat energy `current` would have at temperature equilbrium with `neighbour`
+          equilibrium = totalHeatE / (1 + relativeCapacity)
+          delta = equilibrium - realToFrac (view tileHeat current)
+          res = ((*) `on` realToFrac . resistence . view tileObject) neighbour current
+        in delta / res
 
-    -- TODO: finalize ResumableSinks properly
-    updateTile ::
-        (Monad m, Applicative m) =>
-        Neighbours Tile ->
-        (Tile, Transformations m) ->
-        m (Tile, Transformations m)
-    updateTile ns (t, transformers) = do
-        (objChanges, transformers')
-            <- partitionEithers <$> traverse (resumeSink [ns]) transformers
-        case objChanges of
-          [] -> return (t, transformers')
-          (State obj' rerun:_) ->
-              (if rerun then updateTile ns else return) (tileState obj')
+initGame :: (Applicative m, Monad m) => Board (UpdateTile m)
+initGame = makeUpdateTile <$> initBoard

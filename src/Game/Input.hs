@@ -11,7 +11,7 @@ import Physics.Types
 data Input = Select Object -- ^ Select an object type
            | Place Position -- ^ Place an object
            | Step -- ^ Advance the world state
-  deriving (Show, Read, Eq, Typeable)
+  deriving (Show, Eq, Typeable)
 
 data Tick = Tick -- ^ Just a heartbeat/time increment
-  deriving (Show, Read, Eq, Typeable)
+  deriving (Show, Eq, Typeable)

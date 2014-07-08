@@ -54,7 +54,7 @@ keymap = fromList
 clickAction :: Position -> Input
 clickAction = Place
 
-data ShortObject = A | F | R | S
+data ShortObject = A | B | F | R | S
     deriving (Eq)
 
 initBoard :: Board Tile
@@ -66,12 +66,13 @@ initBoard
            (zip objects [Vector x y | y <- reverse [0..31], x <- [0..31]])
    where
        obj A = Air
+       obj B = Basalt
        obj F = Fire
        obj R = Rock
        obj S = Snow
 
        objects =
-          [ A, A, A, A, A, A, A, A, A, A, A, A, A, S, S, S, S, S, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          [ A, A, A, A, A, A, A, A, A, A, A, A, S, S, S, S, S, S, S, A, A, A, A, A, A, A, A, A, A, A, A, A
           , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
           , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, F, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
           , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
@@ -96,11 +97,11 @@ initBoard
           , A, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
           , A, A, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
           , A, A, A, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
-          , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
-          , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
-          , A, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, A, R, R, A
-          , R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, A, R, A
-          , R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, A, R, A
-          , R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, A, R, A
+          , A, A, A, A, A, R, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, R, R, A
+          , A, A, A, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, R, A
+          , A, A, A, A, A, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, A, R, A
+          , B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, A, R, A
           , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, F, A, A
           ]

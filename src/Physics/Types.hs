@@ -6,7 +6,9 @@ module Physics.Types ( PhysicsValue
                      , Time
                      , Distance
                      , Heat
+                     , Temperature
                      , HeatCapacity
+                     , HeatResistence
                      , Size
                      , Position
                      ) where
@@ -25,9 +27,13 @@ type Scalar = PhysicsValue
 type Time = Milli
 -- | Measure of space
 type Distance = PhysicsValue
--- | Measure of heat
+-- | Measure of stored heat energy
 type Heat = Milli
-type HeatCapacity = Deci
+type Temperature = Heat
+-- | dE/dT
+type HeatCapacity = Micro
+-- | scalar factor inversely proportional to how easily heat is transferred.
+type HeatResistence = Integer
 
 -- | Dimensions of an object
 type Size = Vector Distance

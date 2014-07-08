@@ -41,7 +41,7 @@ dimensions = Vector Width Height
 -- | Homogenous vector. When possible, use predefined functions, rather than the Vector data constructor.
 -- Code should strive to be generic with respect to the number of dimensions in a Vector.
 data Vector a = Vector a a
-    deriving (Eq, Show, Read, Generic)
+    deriving (Eq, Show, Generic)
 
 instance Hashable a => Hashable (Vector a)
 

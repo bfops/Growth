@@ -7,6 +7,7 @@ module Game.Render ( Drawable (..)
 import Control.Applicative
 import Control.Lens
 import Data.Array
+
 import Game.Object.Type
 import Game.State
 import Game.Vector
@@ -35,21 +36,22 @@ instance Drawable GameState where
     draw = sequence_ . elems . mapWithIx (curry draw) . tiles
 
 instance Drawable (Position, Tile) where
-    draw (p, t)
-        = let tileColor = case view tileObject t of
-                Fire -> orange
-                Water s -> maybe blue flowingColor s
-                Grass -> green
-                Rock -> grey
-                Lava False -> red
-                Lava True -> Color4 0.6 0.1 0 1
-                Air -> cyan
-                Dirt -> Color4 0.3 0.2 0 1
-                Ice -> Color4 0.2 0.6 1 1
-                Snow -> white
-          in drawQuad tileColor p
-        where
-            flowingColor (l, r) = Color4 0 0.25 (if l || r then 0.75 else 1) 1
+  draw (p, t)
+    = let tileColor = case view tileObject t of
+            Fire -> orange
+            Water s -> maybe blue flowingColor s
+            Grass -> green
+            Rock -> grey
+            Lava False -> red
+            Lava True -> Color4 0.6 0.1 0 1
+            Air -> cyan
+            Dirt -> Color4 0.3 0.2 0 1
+            Ice -> Color4 0.2 0.6 1 1
+            Snow -> white
+            Basalt -> Color4 0.2 0 0.2 1
+      in drawQuad tileColor p
+    where
+      flowingColor (l, r) = Color4 0 0.25 (if l || r then 0.75 else 1) 1
 
 -- | `draw c o` draws `o` as a quadrilateral, based on its position and size.
 drawQuad :: Color4 GLdouble -> Position -> IO ()
