@@ -15,15 +15,17 @@ import Control.Monad
 import Data.Array as Array
 import Data.Conduit
 import Data.Conduit.List as Conduit
+import Data.Either
 import Data.Hashable
 import Data.OpenUnion
 import Data.Pair
+import Data.Conduit.ResumableSink
 import Data.Typeable
 import GHC.Generics
 
 import Data.Conduit.Extra
 import Game.Input
-import Game.Object
+import Game.Object.Transformation
 import Game.Object.Type hiding (left, right)
 import Game.Vector
 import Physics.Types
@@ -67,7 +69,7 @@ stepAll is conduits = do
     fromSingle [x] = x
     fromSingle _ = error "fromSingle"
 
-newtype GameState = GameState { tiles :: Board }
+newtype GameState = GameState { tiles :: Board Tile }
   deriving (Show, Read, Eq)
 
 $(makeLenses ''GameState)
@@ -92,13 +94,13 @@ updates = void (mapAccum (toUpdate @> tick @> typesExhausted) Nothing) =$= Condu
 update ::
     (Applicative m, Monad m) =>
     Union '[GameUpdate, Tick] ->
-    (Board, Array Position (Update m)) ->
-    m (Board, Array Position (Update m))
+    (Board Tile, Array Position (Update m)) ->
+    m (Board Tile, Array Position (Update m))
 update = updateGame @> updateTick @> typesExhausted
   where
     updateTick Tick (b, a) = return (b, a)
 
-    updateGame (Create p obj) (b, a) = return $ (b // [(p, Tile obj)], a // [(p, tile obj)])
+    updateGame (Create p obj) (b, a) = return $ (b // [(p, makeTile obj)], a // [(p, tileUpdater obj)])
 
     updateGame UpdateStep (b, a) = stepAll disseminate a
         where
@@ -113,4 +115,32 @@ update = updateGame @> updateTick @> typesExhausted
                                   in guard (inRange (bounds b) p') >> Just (b!p')
 
 initGame :: (Applicative m, Monad m) => Array Position (Update m)
-initGame = tile . objType <$> initBoard
+initGame = tileUpdater . view tileObject <$> initBoard
+
+type Update m = ResumableConduit (Neighbours Tile) m Tile
+type Transformations m = [ResumableSink m (Neighbours Tile) NewState]
+
+resumeSink :: Monad m => [i] -> ResumableSink m i r -> m (Either r (ResumableSink m i r))
+resumeSink is s = sourceList is ++$$ s
+
+tileState :: Monad m => Object -> (Tile, Transformations m)
+tileState obj = (makeTile obj, newResumableSink <$> transformations obj)
+
+tileUpdater :: (Applicative m, Monad m) => Object -> Update m
+tileUpdater obj = newResumableConduit $ void $ mapAccumM updateAndProduceTile (tileState obj)
+  where
+    updateAndProduceTile a b = updateTile a b <&> \(t', ts') -> ((t', ts'), t')
+
+    -- TODO: finalize ResumableSinks properly
+    updateTile ::
+        (Monad m, Applicative m) =>
+        Neighbours Tile ->
+        (Tile, Transformations m) ->
+        m (Tile, Transformations m)
+    updateTile ns (t, transformers) = do
+        (objChanges, transformers')
+            <- partitionEithers <$> traverse (resumeSink [ns]) transformers
+        case objChanges of
+          [] -> return (t, transformers')
+          (State obj' rerun:_) ->
+              (if rerun then updateTile ns else return) (tileState obj')

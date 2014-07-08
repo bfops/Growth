@@ -14,7 +14,6 @@ import Data.Array
 import Data.HashMap.Strict as HashMap
 
 import Game.Input
-import Game.Object
 import Game.Object.Type
 import Game.Vector
 import Physics.Types
@@ -58,9 +57,9 @@ clickAction = Place
 data ShortObject = A | F | R | S
     deriving (Eq)
 
-initBoard :: Board
+initBoard :: Board Tile
 initBoard
-      = fmap Tile
+      = fmap makeTile
       $ listArray (0, boardDims - 1) (repeat Air)
        // fmap
            (\(b, p) -> (p, obj b))

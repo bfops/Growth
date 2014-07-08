@@ -6,7 +6,7 @@ module Game.Object.Transformation ( Transformation
                                   ) where
 
 import Control.Applicative
-import Control.Lens ((<&>))
+import Control.Lens
 import Control.Monad
 import Data.Conduit as Conduit
 import Data.Conduit.List as Conduit
@@ -27,8 +27,7 @@ state o = State o False
 rerun :: Object -> NewState
 rerun o = State o True
 
-type Neighbours = Seeds
-type Transformation m = Sink Neighbours m NewState
+type Transformation m = Sink (Neighbours Tile) m NewState
 
 -- | Wait for a value to surpass a target (in either direction)
 exceed :: (Num i, Ord i, Monad m) => i -> Sink i m ()
@@ -48,15 +47,15 @@ mapreduce reduce b f = Foldable.foldl' reduce b . fmap f
 mapsum :: (Functor t, Foldable t, Num b) => (a -> b) -> t a -> b
 mapsum = mapreduce (+) 0
 
-neighbour :: (Maybe Object -> Bool) -> Seeds -> Integer
+neighbour :: (Maybe Tile -> Bool) -> Neighbours Tile -> Integer
 neighbour n = mapsum $ mapsum $ \x -> if n x then 1 else 0
 
-mix :: Object -> Seeds -> Bool
-mix obj = Foldable.any $ Foldable.any (== Just obj)
+mix :: Object -> Neighbours Tile -> Bool
+mix obj = Foldable.any $ Foldable.any $ maybe False ((== obj) . view tileObject)
 
 -- | Keep track of accumulated heat from neighbors.
-heat :: Monad m => Conduit Seeds m Integer
-heat = count $ mapsum $ mapsum $ maybe 0 deltaHeat
+heat :: Monad m => Conduit (Neighbours Tile) m Integer
+heat = count $ mapsum $ mapsum $ maybe 0 (deltaHeat . view tileObject)
   where
     deltaHeat Fire = 2
     deltaHeat (Lava True) = 12
@@ -65,7 +64,7 @@ heat = count $ mapsum $ mapsum $ maybe 0 deltaHeat
     deltaHeat _ = 0
 
 -- | Get info about the water flowing through this tile from info about the neighbors.
-waterFlow :: Neighbours -> Maybe Flow
+waterFlow :: Neighbours Tile -> Maybe Flow
 waterFlow s
     = let
         footing = down s
@@ -83,7 +82,7 @@ waterFlow s
             else (not l, not r)
 
 -- | Incorporate flowing Water
-hydrophilic :: Neighbours -> Bool
+hydrophilic :: Neighbours Tile -> Bool
 hydrophilic = maybe False (\_-> True) . waterFlow
 
 -- | Water will flow through (and occupy) these tiles
@@ -98,7 +97,7 @@ magmify :: Monad m => Transformation m
 magmify = wait (mix $ Lava True) $> state (Lava False)
 
 -- | The conditions for Lava to convert to Rock
-lavaToRock :: Neighbours -> Bool
+lavaToRock :: Neighbours Tile -> Bool
 lavaToRock s = Foldable.any ($ s) [hydrophilic, mix Air]
 
 snowFall :: Monad m => Transformation m
@@ -145,7 +144,7 @@ transformations Rock =
         , magmify
         ]
     where
-        volcano = wait ((Just (Lava True) ==) . down) $> state (Lava True)
+        volcano = wait (maybe False ((Lava True ==) . view tileObject) . down) $> state (Lava True)
 
 transformations Dirt = [wait (mix $ Lava False) $> state (Lava False), magmify]
 

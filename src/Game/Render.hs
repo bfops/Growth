@@ -5,8 +5,8 @@ module Game.Render ( Drawable (..)
                    ) where
 
 import Control.Applicative
+import Control.Lens
 import Data.Array
-import Game.Object
 import Game.Object.Type
 import Game.State
 import Game.Vector
@@ -36,7 +36,7 @@ instance Drawable GameState where
 
 instance Drawable (Position, Tile) where
     draw (p, t)
-        = let tileColor = case objType t of
+        = let tileColor = case view tileObject t of
                 Fire -> orange
                 Water s -> maybe blue flowingColor s
                 Grass -> green
