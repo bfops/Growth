@@ -60,7 +60,7 @@ infixl 4 <%>, <%%>
 data GameUpdate
     = UpdateStep
     | Create Position Object
-  deriving (Show, Eq, Generic, Typeable)
+  deriving (Show, Read, Eq, Generic, Typeable)
 
 instance Hashable GameUpdate
 
@@ -70,7 +70,7 @@ resumeSink :: Monad m => [i] -> ResumableSink m i r -> m (Either r (ResumableSin
 resumeSink is s = sourceList is ++$$ s
 
 newtype GameState = GameState { tiles :: Board Tile }
-  deriving (Show, Eq)
+  deriving (Show, Read, Eq)
 
 -- | A `Tile` coupled with an updater.
 data UpdateTile m = UpdateTile

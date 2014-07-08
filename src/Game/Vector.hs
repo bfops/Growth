@@ -29,7 +29,7 @@ import Test.QuickCheck as QuickCheck
 
 -- | Physical dimensions in the game
 data Dimension = Width | Height
-    deriving (Show, Eq, Ord, Enum, Bounded)
+    deriving (Show, Read, Eq, Ord, Enum, Bounded)
 
 instance Arbitrary Dimension where
     arbitrary = QuickCheck.elements [minBound..maxBound]
@@ -41,7 +41,7 @@ dimensions = Vector Width Height
 -- | Homogenous vector. When possible, use predefined functions, rather than the Vector data constructor.
 -- Code should strive to be generic with respect to the number of dimensions in a Vector.
 data Vector a = Vector a a
-    deriving (Eq, Show, Generic)
+    deriving (Eq, Read, Show, Generic)
 
 instance Hashable a => Hashable (Vector a)
 

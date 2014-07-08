@@ -7,7 +7,7 @@ module Data.Pair( Pair (..)
 import Data.Foldable
 
 data Pair a = Pair a a
-  deriving (Show, Eq, Ord, Functor, Foldable)
+  deriving (Show, Read, Eq, Ord, Functor, Foldable)
 
 pair :: (a -> a -> b) -> Pair a -> b
 pair f (Pair x y) = f x y

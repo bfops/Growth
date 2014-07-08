@@ -67,7 +67,7 @@ data Object = Fire
             | Ice
             | Snow
             | Basalt
-    deriving (Show, Eq, Ord, Generic)
+    deriving (Show, Read, Eq, Ord, Generic)
 
 instance Hashable Object
 
@@ -81,7 +81,7 @@ data Tile = Tile
     { _tileObject :: Object
     , _tileHeat :: Heat
     }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Read, Eq, Ord, Generic)
 
 $(makeLenses ''Tile)
 
@@ -95,7 +95,7 @@ data TileUpdateIn = TileUpdateIn
     { tileIn :: Tile
     , neighbours :: Neighbours Tile
     }
-  deriving (Show, Eq)
+  deriving (Show, Read, Eq)
 
 heatIn :: TileUpdateIn -> Heat
 heatIn = view tileHeat . tileIn
