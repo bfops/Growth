@@ -9,6 +9,7 @@ module Game.State ( GameState (..)
                   ) where 
 
 import Control.Applicative
+import Control.DeepSeq
 import Control.Exception
 import Control.Lens
 import Control.Monad
@@ -96,7 +97,7 @@ update ::
     Union '[GameUpdate, Tick] ->
     (Board Tile, Array Position (Update m)) ->
     m (Board Tile, Array Position (Update m))
-update = updateGame @> updateTick @> typesExhausted
+update = force . (updateGame @> updateTick @> typesExhausted)
   where
     updateTick Tick (b, a) = return (b, a)
 
