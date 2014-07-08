@@ -10,11 +10,8 @@ module Config ( viewDist
               , initBoard
               ) where
 
-import Control.Applicative
-import Control.Monad
 import Data.Array
 import Data.HashMap.Strict as HashMap
-import Data.Maybe
 
 import Game.Input
 import Game.Object
@@ -50,56 +47,61 @@ keymap = fromList
        , (Key'A, Select Air)
        , (Key'R, Select Rock)
        , (Key'S, Select Snow)
+       , (Key'L, Select (Lava False))
+       , (Key'I, Select Ice)
+       , (Key'W, Select (Water Nothing))
        ]
 
 clickAction :: Position -> Input
 clickAction = Place
 
-data FullOrEmpty = I | X
+data ShortObject = A | F | R | S
     deriving (Eq)
 
 initBoard :: Board
 initBoard
-      = Tile
-    <$> listArray (0, boardDims - 1) (repeat Air)
-    //  [(Vector 29 0, Fire), (Vector 15 29, Fire)]
-    //  [(Vector i 31, Snow) | i <- [13..17]]
-    //  [(Vector (17 - i + j) (25 - i), Snow) | i <- [0..3], j <- [0 .. 2 * i]]
-    //  mapMaybe
-          (\(b, p) -> guard (b == X) >> Just (p, Rock))
-          (zip rocks [Vector x y | y <- reverse [0..31], x <- [0..31]])
-  where
-      rocks =
-          [ I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, I, I, I, I, I, I, I, I, X, X, X, X, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, I, I, I, I, I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, I, I, I, I, X, X, X, I, I, I, I, I, I, X, X, X, X, X, X, X, I, I, I, I, I, I, I
-          , I, I, I, I, I, I, X, X, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, X, X, X, I, I, I, I
-          , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, X, X, I, I
-          , I, I, I, I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, X, I
-          , I, I, I, X, X, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, X, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, X, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, X, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, X, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
-          , I, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, I, X, X, I
-          , X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, I, X, I
-          , X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, I, X, I
-          , X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, I, X, I
-          , I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I, I
+      = fmap Tile
+      $ listArray (0, boardDims - 1) (repeat Air)
+       // fmap
+           (\(b, p) -> (p, obj b))
+           (zip objects [Vector x y | y <- reverse [0..31], x <- [0..31]])
+   where
+       obj A = Air
+       obj F = Fire
+       obj R = Rock
+       obj S = Snow
+
+       objects =
+          [ A, A, A, A, A, A, A, A, A, A, A, A, A, S, S, S, S, S, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, F, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, A, A, A, A, A, A, A, R, R, R, R, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, A, A, A, A, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, A, A, A, R, R, R, A, A, A, A, A, S, R, R, R, R, R, R, R, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, R, R, R, A, A, A, A, A, A, A, S, S, S, A, A, A, A, A, A, R, R, R, A, A, A, A
+          , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, S, S, S, S, S, A, A, A, A, A, A, A, A, R, R, A, A
+          , A, A, A, A, A, A, R, A, A, A, A, A, A, A, S, S, S, S, S, S, S, A, A, A, A, A, A, A, A, A, R, A
+          , A, A, A, R, R, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, R, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, R, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, R, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, R, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A
+          , A, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, A, R, R, A
+          , R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, A, R, A
+          , R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, A, R, A
+          , R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R, A, R, A
+          , A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, A, F, A, A
           ]
