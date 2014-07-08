@@ -22,7 +22,7 @@ executable growth
                     game-wrappers == 0.5.* && >= 0.5.2,
                     hashable,
                     lens == 4.2.*,
-                    open-union == 0.0.*,
+                    open-union == 0.1.*,
                     QuickCheck >= 2,
                     transformers,
                     unordered-containers,
