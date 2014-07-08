@@ -1,5 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DoAndIfThenElse #-}
 module Data.Conduit.Extra ( awaitJust
+                          , awaitUntil
                           , exhaustInput
                           , mapFirst
                           , mapSecond
@@ -15,6 +17,14 @@ import Data.Maybe
 
 awaitJust :: Monad m => ConduitM i o m i
 awaitJust = fromMaybe (error "awaitJust failed") <$> Conduit.await
+{-# INLINE awaitJust #-}
+
+awaitUntil :: Monad m => (i -> Bool) -> a -> ConduitM i o m a
+awaitUntil f a = do
+    i <- awaitJust
+    if f i
+    then return a
+    else awaitUntil f a
 
 yieldM :: Monad m => m a -> Conduit i m a
 yieldM m = lift m >>= Conduit.yield

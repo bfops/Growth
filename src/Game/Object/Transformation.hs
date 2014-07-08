@@ -9,12 +9,12 @@ import Control.Applicative
 import Control.Lens ((<&>))
 import Control.Monad
 import Data.Conduit as Conduit
+import Data.Conduit.List as Conduit
 import Data.Functor
 import Data.Foldable as Foldable
 import Data.Monoid
 
 import Data.Conduit.Extra as Conduit
-import Game.Object.Behaviour
 import Game.Object.Type
 
 data NewState
@@ -30,18 +30,52 @@ rerun o = State o True
 type Neighbours = Seeds
 type Transformation m = Sink Neighbours m NewState
 
+-- | Wait for a value to surpass a target (in either direction)
+exceed :: (Num i, Ord i, Monad m) => i -> Sink i m ()
+exceed target = awaitUntil (\i -> signum i == signum target && abs i > abs target) ()
+
+-- | wait until the output becomes True.
+wait :: Monad m => (i -> Bool) -> Sink i m ()
+wait s = Conduit.map s =$= awaitUntil id ()
+
+-- | Accumulate a count.
+count :: Monad m => (i -> Integer) -> Conduit i m Integer
+count c = Conduit.map c =$= void (scan (+) 0)
+
+mapreduce :: (Functor t, Foldable t) => (b -> b -> b) -> b -> (a -> b) -> t a -> b
+mapreduce reduce b f = Foldable.foldl' reduce b . fmap f
+
+mapsum :: (Functor t, Foldable t, Num b) => (a -> b) -> t a -> b
+mapsum = mapreduce (+) 0
+
+neighbour :: (Maybe Object -> Bool) -> Seeds -> Integer
+neighbour n = mapsum $ mapsum $ \x -> if n x then 1 else 0
+
+mix :: Object -> Seeds -> Bool
+mix obj = Foldable.any $ Foldable.any (== Just obj)
+
+-- | Keep track of accumulated heat from neighbors.
+heat :: Monad m => Conduit Seeds m Integer
+heat = count $ mapsum $ mapsum $ maybe 0 deltaHeat
+  where
+    deltaHeat Fire = 2
+    deltaHeat (Lava True) = 12
+    deltaHeat (Lava False) = 8
+    deltaHeat Ice = -1
+    deltaHeat _ = 0
+
 -- | Get info about the water flowing through this tile from info about the neighbors.
 waterFlow :: Neighbours -> Maybe Flow
 waterFlow s
     = let
-        below = down s
+        footing = down s
         above = up s
         l = rightWater $ left s
         r = leftWater $ right s
       in do
         guard $ water above || l || r
         Just $ Just $
-          if not (solid below)
+          if not (solid footing)
           then (False, False)
           else
             if water above
@@ -53,11 +87,11 @@ hydrophilic :: Neighbours -> Bool
 hydrophilic = maybe False (\_-> True) . waterFlow
 
 -- | Water will flow through (and occupy) these tiles
-waterThrough :: Monad m => Transformation m
-waterThrough = do
+acceptWater :: Monad m => Transformation m
+acceptWater = do
     neighbors <- waterFlow <$> awaitJust
     case neighbors of
-      Nothing -> waterThrough
+      Nothing -> acceptWater
       Just w -> return $ state $ Water w
 
 magmify :: Monad m => Transformation m
@@ -72,7 +106,7 @@ snowFall = wait (snow . up) $> state Snow
 
 transformations :: Monad m => Object -> [Transformation m]
 
-transformations Fire = [magmify, waterThrough]
+transformations Fire = [magmify, acceptWater]
 transformations Grass =
     [ magmify
     , heat =$ exceed 2 $> state Fire
@@ -115,7 +149,7 @@ transformations Rock =
 
 transformations Dirt = [wait (mix $ Lava False) $> state (Lava False), magmify]
 
-transformations Air = [magmify, waterThrough, count (neighbour dirt) =$ exceed 32 $> state Grass, snowFall]
+transformations Air = [magmify, acceptWater, count (neighbour dirt) =$ exceed 32 $> state Grass, snowFall]
 
 transformations Ice = [magmify, heat =$ exceed 2 $> state (Water Nothing)]
 
